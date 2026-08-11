@@ -17,10 +17,6 @@ const {
   finalizarDescarga,
 } = require('./resolucionesBot');
 
-/**
- * Ejecuta la descarga de resoluciones para un mes/año dado.
- * mes: número de 1 a 12. anio: ej. 2026.
- */
 async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = false } = {}) {
   const avisar = (evento) => {
     console.log(evento);
@@ -36,25 +32,22 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
   const reporte = { exitosos: [], sin_resoluciones: [], fallidos: [] };
 
   try {
-    // 1. Login (entrando por cualquier municipio de origen)
     await loginBcgs(page, config.URL_BCGS, config.USUARIO_SISTEMA, config.CLAVE_SISTEMA, 'ABEJORRAL', {
       carpetaDebug: rutaCarpetaMes,
     });
     avisar({ tipo: 'sesion_iniciada' });
 
-    // 2. Ir al módulo de descarga de resoluciones
     await irAModuloDescargaResoluciones(page);
     await seleccionarRadioRangoFechas(page);
 
-    // 3. Establecer el rango de fechas del mes requerido
     const { fechaInicial, fechaFinal } = await establecerRangoFechasMes(page, mes, anio);
     avisar({ tipo: 'fechas_establecidas', fechaInicial, fechaFinal });
 
-    // 4. Obtener la lista de municipios del desplegable
-    const municipios = await obtenerListaMunicipios(page, { carpetaDebug: rutaCarpetaMes });
+    const municipiosBrutos = await obtenerListaMunicipios(page, { carpetaDebug: rutaCarpetaMes });
+    const municipios = municipiosBrutos.filter((m) => !m.value.includes('999'));
+    
     avisar({ tipo: 'municipios_encontrados', total: municipios.length });
 
-    // 5. Procesar municipio por municipio
     for (let i = 0; i < municipios.length; i++) {
       const municipio = municipios[i];
       avisar({ tipo: 'descargando', indice: i + 1, total: municipios.length, municipio: municipio.nombre });
@@ -75,13 +68,20 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
       }
     }
 
-    // 6. Cerrar la ventana del módulo
     await finalizarDescarga(page);
   } finally {
     await browser.close();
   }
 
-  // 7. Guardar el informe de ejecución consolidado
+  console.log('\n==================================================');
+  console.log(`MUNICIPIOS SIN MOVIMIENTO/RESOLUCIONES (${reporte.sin_resoluciones.length}):`);
+  if (reporte.sin_resoluciones.length > 0) {
+    reporte.sin_resoluciones.forEach((m) => console.log(` - ${m.municipio}`));
+  } else {
+    console.log(' Todos los municipios registraron movimientos.');
+  }
+  console.log('==================================================\n');
+
   const rutaReporte = path.join(rutaCarpetaMes, '_reporte_descarga.json');
   fs.writeFileSync(rutaReporte, JSON.stringify(reporte, null, 2), 'utf-8');
 

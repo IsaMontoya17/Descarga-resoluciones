@@ -85,16 +85,11 @@ async function obtenerListaMunicipios(page) {
   });
 }
 
-/**
- * Espera a que termine la descarga del archivo o aparezca la alerta de "Sin resoluciones".
- * Garantiza que no existan descargas pendientes (.crdownload) antes de retornar.
- */
 async function esperarDescargaOAlerta(page, carpeta, archivosPrevios, timeoutMs = 120000) {
   const inicio = Date.now();
   const selectorBotonAceptar = '#b2zModalCerrarModal2';
 
   while (Date.now() - inicio < timeoutMs) {
-    // 1. Validar si apareció la alerta de "Sin resoluciones"
     const botonModal = await page.$(selectorBotonAceptar).catch(() => null);
     if (botonModal) {
       const estaVisible = await page.evaluate((el) => {
@@ -111,15 +106,12 @@ async function esperarDescargaOAlerta(page, carpeta, archivosPrevios, timeoutMs 
 
     const archivosActuales = fs.readdirSync(carpeta);
 
-    // 2. Comprobar si hay una descarga aún en curso (.crdownload)
     const hayDescargaEnCurso = archivosActuales.some((f) => f.endsWith('.crdownload'));
 
-    // 3. Buscar archivos totalmente descargados
     const nuevos = archivosActuales.filter(
       (f) => !archivosPrevios.includes(f) && !f.endsWith('.crdownload')
     );
 
-    // Retorna únicamente si hay un archivo nuevo Y ya no hay escrituras temporales activas
     if (nuevos.length > 0 && !hayDescargaEnCurso) {
       await new Promise((r) => setTimeout(r, 1500));
       return { tipo: 'ARCHIVO_DESCARGADO', archivo: nuevos[0] };
@@ -132,7 +124,6 @@ async function esperarDescargaOAlerta(page, carpeta, archivosPrevios, timeoutMs 
 }
 
 async function descargarResolucionMunicipio(page, municipio, carpetaDestino) {
-  // Asegurar que no existan descargas residuales del municipio anterior
   const archivosIniciales = fs.readdirSync(carpetaDestino);
   if (archivosIniciales.some((f) => f.endsWith('.crdownload'))) {
     throw new Error('Existe una descarga previa sin finalizar en la carpeta de destino.');
@@ -141,7 +132,6 @@ async function descargarResolucionMunicipio(page, municipio, carpetaDestino) {
   await page.select('#codigoMunicipio', municipio.value);
   await clicRobusto(page, "//button[contains(., 'Descargar')]", { porXpath: true });
 
-  // Timeout extendido a 120 segundos para descargas pesadas
   const resultado = await esperarDescargaOAlerta(page, carpetaDestino, archivosIniciales, 120000);
 
   if (resultado.tipo === 'SIN_RESOLUCIONES') {
@@ -150,7 +140,6 @@ async function descargarResolucionMunicipio(page, municipio, carpetaDestino) {
 
   const archivoDescargado = resultado.archivo;
 
-  // Extraer únicamente los dígitos numéricos (ej. "string:002" -> "002")
   const codigoLimpio = String(municipio.value).replace(/\D/g, '');
 
   if (!archivoDescargado.includes(codigoLimpio)) {
