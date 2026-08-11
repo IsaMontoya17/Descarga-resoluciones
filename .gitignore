@@ -3,3 +3,7 @@ node_modules/
 
 # Variables de entorno y credenciales
 .env
+
+prueba.js
+
+envio_correos_mensuales/
