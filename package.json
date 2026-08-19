@@ -1,16 +1,31 @@
 {
   "name": "bcgs-automation",
   "version": "1.0.0",
-  "description": "Automatización de descarga de resoluciones BCGS - Gerencia de Catastro",
+  "description": "Automatización de descarga y envío de resoluciones BCGS - Gerencia de Catastro",
   "main": "server.js",
   "scripts": {
     "descargar": "node descargarResoluciones.js",
+    "enviar": "node enviarCorreos.js",
     "servidor": "node server.js",
     "interactivo": "node ejecutarInteractivo.js"
   },
   "dependencies": {
-    "puppeteer": "^22.0.0",
+    "@prisma/client": "^5.22.0",
+    "bcrypt": "^6.0.0",
     "dotenv": "^16.4.0",
-    "express": "^4.19.0"
+    "express": "^4.19.0",
+    "nodemailer": "^6.10.1",
+    "puppeteer": "^22.0.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^26.2.0",
+    "prisma": "^5.22.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
+    "typescript": "^5.5.4"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
