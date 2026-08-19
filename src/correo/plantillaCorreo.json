@@ -1,0 +1,4 @@
+{
+  "asunto": "Entrega de los movimientos generados en el mes de {mes} de {anio} en el municipio de {municipio}",
+  "cuerpo": "{saludo},\n\nDe acuerdo con el artículo 10 de la resolución 746 del 2024 del IGAC, se adjuntan los movimientos realizados en el municipio durante el mes de {mes} de {anio}.\n\nCordialmente,\n\nLUDWYG LONDOÑO\nProfesional Especializado\nGerencia de Catastro - Gobernación de Antioquia"
+}
