@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id            Int         @id @default(autoincrement())
+  nombre        String
+  usuario       String      @unique
+  passwordHash  String      @map("password_hash")
+  rol           String
+  ejecuciones   Ejecucion[]
+
+  @@map("usuarios")
+}
+
+model Ejecucion {
+  id                  Int                 @id @default(autoincrement())
+  mes                 Int
+  anio                Int
+  usuarioId           Int                 @map("usuario_id")
+  usuario             Usuario             @relation(fields: [usuarioId], references: [id])
+  estatus             String              @default("en_progreso")
+  fechaInicio         DateTime            @default(now()) @map("fecha_inicio")
+  fechaFin            DateTime?           @map("fecha_fin")
+  resultadosDescarga  ResultadoDescarga[]
+  resultadosEnvio     ResultadoEnvio[]
+
+  @@map("ejecuciones")
+}
+
+model Municipio {
+  id               Int                 @id @default(autoincrement())
+  codigoBcgs       String              @unique @map("codigo_bcgs")
+  nombre           String
+  correos          CorreoMunicipio[]
+  resultadosDescarga ResultadoDescarga[]
+  resultadosEnvio  ResultadoEnvio[]
+
+  @@map("municipios")
+}
+
+model ResultadoDescarga {
+  id           Int       @id @default(autoincrement())
+  ejecucionId  Int       @map("ejecucion_id")
+  ejecucion    Ejecucion @relation(fields: [ejecucionId], references: [id])
+  municipioId  Int       @map("municipio_id")
+  municipio    Municipio @relation(fields: [municipioId], references: [id])
+  estatus      String    // exitoso | sin_resoluciones | fallido
+  archivo      String?
+  error        String?
+
+  @@map("resultados_descarga")
+}
+
+model ResultadoEnvio {
+  id             Int       @id @default(autoincrement())
+  ejecucionId    Int       @map("ejecucion_id")
+  ejecucion      Ejecucion @relation(fields: [ejecucionId], references: [id])
+  municipioId    Int       @map("municipio_id")
+  municipio      Municipio @relation(fields: [municipioId], references: [id])
+  estatus        String    // exitoso | fallido | omitido | requiere_revision_manual
+  tipoError      String?   @map("tipo_error")
+  intentos       Int?
+  abierto        Boolean   @default(false)
+  fechaApertura  DateTime? @map("fecha_apertura")
+
+  @@map("resultados_envio")
+}
+
+model CorreoMunicipio {
+  id           Int       @id @default(autoincrement())
+  municipioId  Int       @map("municipio_id")
+  municipio    Municipio @relation(fields: [municipioId], references: [id])
+  email        String
+  tipo         String    // para | cc | cco
+
+  @@map("correos_municipio")
+}
