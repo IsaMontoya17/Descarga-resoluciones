@@ -14,4 +14,7 @@ module.exports = {
   EMAIL_CLAVE: process.env.EMAIL_CLAVE,
   EMAIL_REMITENTE_NOMBRE: process.env.EMAIL_REMITENTE_NOMBRE || 'Gerencia de Catastro - Gobernación de Antioquia',
   BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
+
+  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '8h',
 };

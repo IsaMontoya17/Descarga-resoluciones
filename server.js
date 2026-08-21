@@ -5,7 +5,15 @@ const { ejecutarDescargaResoluciones } = require('./src/automatizacion-bcgs/desc
 const app = express();
 app.use(express.json());
 
+const cors = require('cors');
+
+app.use(cors());
+
 const ejecuciones = new Map();
+
+const { login } = require('./src/auth/authController');
+
+app.post('/api/auth/login', login);
 
 app.post('/api/descargas', (req, res) => {
   const { mes, anio } = req.body;
