@@ -58,16 +58,14 @@ model ResultadoDescarga {
 }
 
 model ResultadoEnvio {
-  id             Int       @id @default(autoincrement())
-  ejecucionId    Int       @map("ejecucion_id")
-  ejecucion      Ejecucion @relation(fields: [ejecucionId], references: [id])
-  municipioId    Int       @map("municipio_id")
-  municipio      Municipio @relation(fields: [municipioId], references: [id])
-  estatus        String    // exitoso | fallido | omitido | requiere_revision_manual
-  tipoError      String?   @map("tipo_error")
-  intentos       Int?
-  abierto        Boolean   @default(false)
-  fechaApertura  DateTime? @map("fecha_apertura")
+  id           Int       @id @default(autoincrement())
+  ejecucionId  Int       @map("ejecucion_id")
+  ejecucion    Ejecucion @relation(fields: [ejecucionId], references: [id])
+  municipioId  Int       @map("municipio_id")
+  municipio    Municipio @relation(fields: [municipioId], references: [id])
+  estatus      String    // exitoso | fallido | omitido | requiere_revision_manual
+  tipoError    String?   @map("tipo_error")
+  intentos     Int?
 
   @@map("resultados_envio")
 }
