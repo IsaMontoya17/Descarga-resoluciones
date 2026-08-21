@@ -1,7 +1,9 @@
 const path = require('path');
 const fs = require('fs');
-const config = require('./config');
-const { nombreMes } = require('./utils');
+const config = require('../config/config');
+const prisma = require('../config/prisma');
+const { obtenerOCrearMunicipio, obtenerUsuarioAdmin } = require('../utils/municipios');
+const { nombreMes } = require('../utils/utils');
 const {
   iniciarNavegador,
   configurarCarpetaDescargas,
@@ -22,6 +24,12 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
     console.log(evento);
     if (onProgreso) onProgreso(evento);
   };
+
+  const admin = await obtenerUsuarioAdmin(prisma);
+  const ejecucion = await prisma.ejecucion.create({
+    data: { mes, anio, usuarioId: admin.id, estatus: 'en_progreso' },
+  });
+  avisar({ tipo: 'ejecucion_registrada', ejecucionId: ejecucion.id });
 
   const rutaCarpetaMes = path.resolve(crearCarpetaMes(config.CARPETA_PRINCIPAL, nombreMes(mes), anio));
   avisar({ tipo: 'carpeta_lista', ruta: rutaCarpetaMes });
@@ -45,30 +53,67 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
 
     const municipiosBrutos = await obtenerListaMunicipios(page, { carpetaDebug: rutaCarpetaMes });
     const municipios = municipiosBrutos.filter((m) => !m.value.includes('999'));
-    
+
     avisar({ tipo: 'municipios_encontrados', total: municipios.length });
 
     for (let i = 0; i < municipios.length; i++) {
       const municipio = municipios[i];
+      const codigoLimpio = String(municipio.value).replace(/\D/g, '');
       avisar({ tipo: 'descargando', indice: i + 1, total: municipios.length, municipio: municipio.nombre });
+
+      const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, municipio.nombre);
 
       try {
         const resultado = await descargarResolucionMunicipio(page, municipio, rutaCarpetaMes);
 
         if (resultado === 'SIN_RESOLUCIONES') {
           reporte.sin_resoluciones.push({ municipio: municipio.nombre, codigo: municipio.value });
+          await prisma.resultadoDescarga.create({
+            data: {
+              ejecucionId: ejecucion.id,
+              municipioId: municipioDb.id,
+              estatus: 'sin_resoluciones',
+            },
+          });
           avisar({ tipo: 'descarga_sin_datos', municipio: municipio.nombre });
         } else {
           reporte.exitosos.push({ municipio: municipio.nombre, codigo: municipio.value, archivo: resultado });
+          await prisma.resultadoDescarga.create({
+            data: {
+              ejecucionId: ejecucion.id,
+              municipioId: municipioDb.id,
+              estatus: 'exitoso',
+              archivo: resultado,
+            },
+          });
           avisar({ tipo: 'descarga_ok', municipio: municipio.nombre, archivo: resultado });
         }
       } catch (err) {
         reporte.fallidos.push({ municipio: municipio.nombre, codigo: municipio.value, error: err.message });
+        await prisma.resultadoDescarga.create({
+          data: {
+            ejecucionId: ejecucion.id,
+            municipioId: municipioDb.id,
+            estatus: 'fallido',
+            error: err.message,
+          },
+        });
         avisar({ tipo: 'descarga_error', municipio: municipio.nombre, error: err.message });
       }
     }
 
     await finalizarDescarga(page);
+
+    await prisma.ejecucion.update({
+      where: { id: ejecucion.id },
+      data: { estatus: 'completado', fechaFin: new Date() },
+    });
+  } catch (err) {
+    await prisma.ejecucion.update({
+      where: { id: ejecucion.id },
+      data: { estatus: 'error', fechaFin: new Date() },
+    });
+    throw err;
   } finally {
     await browser.close();
   }
@@ -87,13 +132,14 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
 
   avisar({
     tipo: 'finalizado',
+    ejecucionId: ejecucion.id,
     exitosos: reporte.exitosos.length,
     sin_resoluciones: reporte.sin_resoluciones.length,
     fallidos: reporte.fallidos.length,
     rutaReporte,
   });
 
-  return reporte;
+  return { ...reporte, ejecucionId: ejecucion.id };
 }
 
 if (require.main === module) {
