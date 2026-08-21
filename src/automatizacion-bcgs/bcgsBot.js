@@ -1,5 +1,5 @@
 const { clicRobusto, ingresarTextoAngular, hacerHoverElemento } = require('./browser');
-const { normalizarTexto } = require('./utils');
+const { normalizarTexto } = require('../utils/utils');
 
 async function loginBcgs(page, url, usuario, password, municipio) {
   await page.goto(url, { waitUntil: 'networkidle2' });
