@@ -3,6 +3,7 @@ const fs = require('fs');
 const config = require('../config/config');
 const prisma = require('../config/prisma');
 const { obtenerOCrearMunicipio } = require('../utils/municipios');
+const { obtenerDestinatarioMunicipio } = require('../utils/destinatarios');
 const { nombreMes } = require('../utils/utils');
 const {
   cargarJSON,
@@ -45,7 +46,6 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   }
 
   const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
-  const rutaDestinatarios = path.resolve(__dirname, 'destinatariosPrueba.json');
 
   let plantilla;
   try {
@@ -62,18 +62,9 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
     );
   }
 
-  let destinatarios;
-  try {
-    destinatarios = cargarJSON(rutaDestinatarios);
-  } catch (err) {
-    throw new Error(
-      `No se pudo cargar el archivo de destinatarios (${rutaDestinatarios}). Si no existe, cópialo desde destinatariosPrueba.example.json y complétalo con los correos reales. Detalle: ${err.message}`
-    );
-  }
-
   const transportador = crearTransportador(config);
 
-  const reporteEnvio = { exitosos: [], fallidos: [], omitidos: [] };
+  const reporteEnvio = { exitosos: [], requieren_revision_manual: [], omitidos: [] };
 
   reporteDescarga.sin_resoluciones.forEach((m) => {
     reporteEnvio.omitidos.push({ municipio: m.municipio, codigo: m.codigo, motivo: 'sin_movimientos' });
@@ -86,24 +77,24 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   for (let i = 0; i < municipiosAEnviar.length; i++) {
     const item = municipiosAEnviar[i];
     const codigoLimpio = String(item.codigo).replace(/\D/g, '');
-    const destinatario = destinatarios[codigoLimpio];
 
     avisar({ tipo: 'enviando', indice: i + 1, total: municipiosAEnviar.length, municipio: item.municipio });
 
     const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, item.municipio);
+    const destinatario = await obtenerDestinatarioMunicipio(prisma, codigoLimpio);
 
-    if (!destinatario) {
+    if (!destinatario || destinatario.para.length === 0) {
       const error = 'Sin destinatarios configurados para este municipio.';
-      reporteEnvio.fallidos.push({ municipio: item.municipio, codigo: item.codigo, error });
+      reporteEnvio.requieren_revision_manual.push({ municipio: item.municipio, codigo: item.codigo, error });
       await prisma.resultadoEnvio.create({
         data: {
           ejecucionId: ejecucion.id,
           municipioId: municipioDb.id,
-          estatus: 'fallido',
+          estatus: 'requiere_revision_manual',
           tipoError: error,
         },
       });
-      avisar({ tipo: 'envio_error', municipio: item.municipio, error });
+      avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, error });
       continue;
     }
 
@@ -136,17 +127,17 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
       });
       avisar({ tipo: 'envio_ok', municipio: item.municipio, intentos: resultado.intentos });
     } else {
-      reporteEnvio.fallidos.push({ municipio: item.municipio, codigo: item.codigo, error: resultado.error });
+      reporteEnvio.requieren_revision_manual.push({ municipio: item.municipio, codigo: item.codigo, error: resultado.error });
       await prisma.resultadoEnvio.create({
         data: {
           ejecucionId: ejecucion.id,
           municipioId: municipioDb.id,
-          estatus: 'fallido',
+          estatus: 'requiere_revision_manual',
           tipoError: resultado.error,
           intentos: resultado.intentos,
         },
       });
-      avisar({ tipo: 'envio_error', municipio: item.municipio, error: resultado.error });
+      avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, error: resultado.error });
     }
   }
 
@@ -156,14 +147,14 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   console.log('\n==================================================');
   console.log(`ENVÍO DE CORREOS — ${nombreMes(mes)} ${anio}`);
   console.log(`Exitosos: ${reporteEnvio.exitosos.length}`);
-  console.log(`Fallidos: ${reporteEnvio.fallidos.length}`);
+  console.log(`Requieren revisión manual: ${reporteEnvio.requieren_revision_manual.length}`);
   console.log(`Omitidos (sin movimientos): ${reporteEnvio.omitidos.length}`);
   console.log('==================================================\n');
 
   avisar({
     tipo: 'finalizado',
     exitosos: reporteEnvio.exitosos.length,
-    fallidos: reporteEnvio.fallidos.length,
+    requieren_revision_manual: reporteEnvio.requieren_revision_manual.length,
     omitidos: reporteEnvio.omitidos.length,
     rutaReporteEnvio,
   });
