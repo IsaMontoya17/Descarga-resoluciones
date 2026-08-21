@@ -46,7 +46,8 @@ async function enviarCorreoMunicipio(transportador, {
   }
 
   const asunto = reemplazarVariables(plantilla.asunto, datos);
-  const cuerpo = reemplazarVariables(plantilla.cuerpo, datos);
+  const cuerpoTexto = reemplazarVariables(plantilla.cuerpo, datos);
+  const cuerpoHtml = cuerpoTexto.replace(/\n/g, '<br>');
 
   const opciones = {
     from: remitenteNombre ? `"${remitenteNombre}" <${remitenteCorreo}>` : remitenteCorreo,
@@ -54,7 +55,8 @@ async function enviarCorreoMunicipio(transportador, {
     cc: (destinatario.cc || []).join(', ') || undefined,
     bcc: (destinatario.cco || []).join(', ') || undefined,
     subject: asunto,
-    text: cuerpo,
+    text: cuerpoTexto,
+    html: cuerpoHtml,
   };
 
   if (rutaAdjunto) {

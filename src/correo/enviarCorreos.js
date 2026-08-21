@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const config = require('../config/config');
+const prisma = require('../config/prisma');
+const { obtenerOCrearMunicipio } = require('../utils/municipios');
 const { nombreMes } = require('../utils/utils');
 const {
   cargarJSON,
@@ -15,12 +17,11 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   };
 
   function obtenerSaludo() {
-  const hora = new Date().getHours();
-  return hora < 12 ? 'Buenos días' : 'Buenas tardes';
-}
+    const hora = new Date().getHours();
+    return hora < 12 ? 'Buenos días' : 'Buenas tardes';
+  }
 
-  const rutaCarpetaMes = path.resolve(config.CARPETA_PRINCIPAL, `${nombreMes(mes)}_${anio}`);
-  
+  const rutaCarpetaMes = path.resolve(__dirname, '../automatizacion-bcgs/envio_correos_mensuales', `${nombreMes(mes)}_${anio}`);
   const rutaReporteDescarga = path.join(rutaCarpetaMes, '_reporte_descarga.json');
 
   if (!fs.existsSync(rutaReporteDescarga)) {
@@ -30,6 +31,18 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   }
 
   const reporteDescarga = cargarJSON(rutaReporteDescarga);
+
+  const ejecucion = await prisma.ejecucion.findFirst({
+    where: { mes, anio },
+    orderBy: { id: 'desc' },
+  });
+
+  if (!ejecucion) {
+    throw new Error(
+      `No se encontró una ejecución registrada para ${nombreMes(mes)}/${anio} en la base de datos. ` +
+      `Ejecuta primero descargarResoluciones.js.`
+    );
+  }
 
   const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
   const rutaDestinatarios = path.resolve(__dirname, 'destinatariosPrueba.json');
@@ -58,7 +71,7 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
     );
   }
 
-const transportador = crearTransportador(config);
+  const transportador = crearTransportador(config);
 
   const reporteEnvio = { exitosos: [], fallidos: [], omitidos: [] };
 
@@ -77,19 +90,29 @@ const transportador = crearTransportador(config);
 
     avisar({ tipo: 'enviando', indice: i + 1, total: municipiosAEnviar.length, municipio: item.municipio });
 
+    const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, item.municipio);
+
     if (!destinatario) {
       const error = 'Sin destinatarios configurados para este municipio.';
       reporteEnvio.fallidos.push({ municipio: item.municipio, codigo: item.codigo, error });
+      await prisma.resultadoEnvio.create({
+        data: {
+          ejecucionId: ejecucion.id,
+          municipioId: municipioDb.id,
+          estatus: 'fallido',
+          tipoError: error,
+        },
+      });
       avisar({ tipo: 'envio_error', municipio: item.municipio, error });
       continue;
     }
 
     const rutaAdjunto = path.join(rutaCarpetaMes, item.archivo);
     const datos = {
-        saludo: obtenerSaludo(),
-        mes: nombreMes(mes),
-        anio: String(anio),
-        municipio: item.municipio,
+      saludo: obtenerSaludo(),
+      mes: nombreMes(mes),
+      anio: String(anio),
+      municipio: item.municipio,
     };
 
     const resultado = await enviarCorreoConReintentos(transportador, {
@@ -103,9 +126,26 @@ const transportador = crearTransportador(config);
 
     if (resultado.exito) {
       reporteEnvio.exitosos.push({ municipio: item.municipio, codigo: item.codigo, intentos: resultado.intentos });
+      await prisma.resultadoEnvio.create({
+        data: {
+          ejecucionId: ejecucion.id,
+          municipioId: municipioDb.id,
+          estatus: 'exitoso',
+          intentos: resultado.intentos,
+        },
+      });
       avisar({ tipo: 'envio_ok', municipio: item.municipio, intentos: resultado.intentos });
     } else {
       reporteEnvio.fallidos.push({ municipio: item.municipio, codigo: item.codigo, error: resultado.error });
+      await prisma.resultadoEnvio.create({
+        data: {
+          ejecucionId: ejecucion.id,
+          municipioId: municipioDb.id,
+          estatus: 'fallido',
+          tipoError: resultado.error,
+          intentos: resultado.intentos,
+        },
+      });
       avisar({ tipo: 'envio_error', municipio: item.municipio, error: resultado.error });
     }
   }
