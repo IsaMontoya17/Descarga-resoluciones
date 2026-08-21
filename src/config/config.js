@@ -1,4 +1,6 @@
-require('dotenv').config();
+const path = require('path');
+
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 module.exports = {
   URL_BCGS: process.env.URL_BCGS,
@@ -11,4 +13,5 @@ module.exports = {
   EMAIL_USUARIO: process.env.EMAIL_USUARIO,
   EMAIL_CLAVE: process.env.EMAIL_CLAVE,
   EMAIL_REMITENTE_NOMBRE: process.env.EMAIL_REMITENTE_NOMBRE || 'Gerencia de Catastro - Gobernación de Antioquia',
+  BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
 };
