@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@iconify/react": "^6.0.2",
     "@tailwindcss/vite": "^4.3.3",
+    "antd": "^6.6.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "socket.io-client": "^4.8.3",
