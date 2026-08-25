@@ -22,7 +22,7 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
     return hora < 12 ? 'Buenos días' : 'Buenas tardes';
   }
 
-  const rutaCarpetaMes = path.resolve(__dirname, '../automatizacion-bcgs/envio_correos_mensuales', `${nombreMes(mes)}_${anio}`);
+  const rutaCarpetaMes = path.resolve(config.CARPETA_PRINCIPAL, `${nombreMes(mes)}_${anio}`);
   const rutaReporteDescarga = path.join(rutaCarpetaMes, '_reporte_descarga.json');
 
   if (!fs.existsSync(rutaReporteDescarga)) {
