@@ -1,7 +1,12 @@
 import { useState } from 'react';
+import { Layout, Button, Space, Typography, Avatar } from 'antd';
+import { Icon } from '@iconify/react';
 import Login from './pages/Login';
 import PanelEjecucion from './pages/PanelEjecucion';
 import PanelMonitoreo from './pages/PanelMonitoreo';
+
+const { Header, Content } = Layout;
+const { Text } = Typography;
 
 function App() {
   const [usuario, setUsuario] = useState(() => {
@@ -25,29 +30,25 @@ function App() {
   }
 
   return (
-    <div>
-      <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
-        <span className="text-sm text-slate-600">
-          {usuario.nombre} ({usuario.rol})
-        </span>
-        <button
-          onClick={cerrarSesion}
-          className="text-sm text-slate-500 hover:text-slate-800"
-        >
+    <Layout style={{ minHeight: '100vh' }}>
+      <Header style={{ background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid #e2e8f0' }}>
+        <Space>
+          <Avatar icon={<Icon icon="mdi:account-outline" />} />
+          <Text>{usuario.nombre} <Text type="secondary">({usuario.rol})</Text></Text>
+        </Space>
+        <Button type="text" icon={<Icon icon="mdi:logout" />} onClick={cerrarSesion}>
           Cerrar sesión
-        </button>
-      </header>
+        </Button>
+      </Header>
 
-      {ejecucionActual ? (
-        <PanelMonitoreo
-          ejecucionId={ejecucionActual.id}
-          mes={ejecucionActual.mes}
-          anio={ejecucionActual.anio}
-        />
-      ) : (
-        <PanelEjecucion onEjecucionIniciada={manejarEjecucionIniciada} />
-      )}
-    </div>
+      <Content>
+        {ejecucionActual ? (
+          <PanelMonitoreo ejecucionId={ejecucionActual.id} mes={ejecucionActual.mes} anio={ejecucionActual.anio} />
+        ) : (
+          <PanelEjecucion onEjecucionIniciada={manejarEjecucionIniciada} />
+        )}
+      </Content>
+    </Layout>
   );
 }
 
