@@ -1,14 +1,15 @@
 import { useState } from 'react';
+import { Form, Input, Button, Card, Alert, Typography } from 'antd';
+import { Icon } from '@iconify/react';
 import { login } from '../api/client';
 
+const { Title, Text } = Typography;
+
 function Login({ onLoginExitoso }) {
-  const [usuario, setUsuario] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
-  async function manejarSubmit(e) {
-    e.preventDefault();
+  async function manejarSubmit({ usuario, password }) {
     setError('');
     setCargando(true);
 
@@ -25,54 +26,27 @@ function Login({ onLoginExitoso }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <form
-        onSubmit={manejarSubmit}
-        className="bg-white rounded-lg shadow-md p-8 w-full max-w-sm"
-      >
-        <h1 className="text-xl font-semibold text-slate-800 mb-1">
-          Gerencia de Catastro
-        </h1>
-        <p className="text-sm text-slate-500 mb-6">
-          Gobernación de Antioquia — Descarga de resoluciones
-        </p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
+      <Card style={{ width: 380 }}>
+        <Title level={4} style={{ marginBottom: 0 }}>Gerencia de Catastro</Title>
+        <Text type="secondary">Gobernación de Antioquia — Descarga de resoluciones</Text>
 
-        {error && (
-          <div className="bg-red-50 text-red-700 text-sm rounded-md px-3 py-2 mb-4">
-            {error}
-          </div>
-        )}
+        {error && <Alert type="error" message={error} showIcon style={{ marginTop: 16 }} />}
 
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Usuario
-        </label>
-        <input
-          type="text"
-          value={usuario}
-          onChange={(e) => setUsuario(e.target.value)}
-          className="w-full border border-slate-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-slate-400"
-          required
-        />
+        <Form layout="vertical" onFinish={manejarSubmit} style={{ marginTop: 20 }}>
+          <Form.Item label="Usuario" name="usuario" rules={[{ required: true, message: 'Ingresa tu usuario' }]}>
+            <Input prefix={<Icon icon="mdi:account-outline" />} size="large" />
+          </Form.Item>
 
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Contraseña
-        </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full border border-slate-300 rounded-md px-3 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-slate-400"
-          required
-        />
+          <Form.Item label="Contraseña" name="password" rules={[{ required: true, message: 'Ingresa tu contraseña' }]}>
+            <Input.Password prefix={<Icon icon="mdi:lock-outline" />} size="large" />
+          </Form.Item>
 
-        <button
-          type="submit"
-          disabled={cargando}
-          className="w-full bg-slate-800 text-white rounded-md py-2 font-medium hover:bg-slate-700 disabled:opacity-50"
-        >
-          {cargando ? 'Ingresando...' : 'Iniciar sesión'}
-        </button>
-      </form>
+          <Button type="primary" htmlType="submit" loading={cargando} block size="large">
+            Iniciar sesión
+          </Button>
+        </Form>
+      </Card>
     </div>
   );
 }
