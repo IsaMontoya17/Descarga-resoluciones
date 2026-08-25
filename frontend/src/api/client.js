@@ -1,5 +1,9 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
+function obtenerToken() {
+  return localStorage.getItem('token');
+}
+
 async function login(usuario, password) {
   const res = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
@@ -16,4 +20,37 @@ async function login(usuario, password) {
   return data;
 }
 
-export { login };
+async function iniciarDescarga(mes, anio) {
+  const res = await fetch(`${API_URL}/api/descargas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${obtenerToken()}`,
+    },
+    body: JSON.stringify({ mes, anio }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'No se pudo iniciar la descarga.');
+  }
+
+  return data;
+}
+
+async function consultarEjecucion(id) {
+  const res = await fetch(`${API_URL}/api/descargas/${id}`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'No se pudo consultar la ejecución.');
+  }
+
+  return data;
+}
+
+export { login, iniciarDescarga, consultarEjecucion };
