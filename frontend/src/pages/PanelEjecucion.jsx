@@ -1,5 +1,9 @@
 import { useState } from 'react';
+import { Card, Select, Button, Alert, Typography, Space } from 'antd';
+import { Icon } from '@iconify/react';
 import { iniciarDescarga } from '../api/client';
+
+const { Title, Text } = Typography;
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -29,65 +33,50 @@ function PanelEjecucion({ onEjecucionIniciada }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
-        <h1 className="text-xl font-semibold text-slate-800 mb-1">
-          Descarga y envío de resoluciones
-        </h1>
-        <p className="text-sm text-slate-500 mb-6">
-          Selecciona el periodo que deseas procesar.
-        </p>
+    <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <Card style={{ width: 420 }}>
+        <Title level={4} style={{ marginBottom: 0 }}>
+            <Icon icon="famicons:calendar" style={{ marginRight: 8 }} />Descarga y envío de resoluciones
+        </Title>
+        <Text type="secondary">Selecciona el periodo que deseas procesar.</Text>
 
-        {error && (
-          <div className="bg-red-50 text-red-700 text-sm rounded-md px-3 py-2 mb-4">
-            {error}
-          </div>
-        )}
+        {error && <Alert type="error" message={error} showIcon style={{ marginTop: 16 }} />}
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Mes
-            </label>
-            <select
+        <Space style={{ width: '100%', marginTop: 20 }} size="middle">
+          <div style={{ flex: 1 }}>
+            <Text strong>Mes</Text>
+            <Select
               value={mes}
-              onChange={(e) => setMes(Number(e.target.value))}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {MESES.map((nombre, i) => (
-                <option key={nombre} value={i + 1}>
-                  {nombre}
-                </option>
-              ))}
-            </select>
+              onChange={setMes}
+              style={{ width: '100%', marginTop: 4 }}
+              size="large"
+              options={MESES.map((nombre, i) => ({ value: i + 1, label: nombre }))}
+            />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Año
-            </label>
-            <select
+          <div style={{ flex: 1 }}>
+            <Text strong>Año</Text>
+            <Select
               value={anio}
-              onChange={(e) => setAnio(Number(e.target.value))}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {ANIOS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+              onChange={setAnio}
+              style={{ width: '100%', marginTop: 4 }}
+              size="large"
+              options={ANIOS.map((a) => ({ value: a, label: a }))}
+            />
           </div>
-        </div>
+        </Space>
 
-        <button
+        <Button
+          type="primary"
+          size="large"
+          block
+          loading={cargando}
           onClick={manejarEjecutar}
-          disabled={cargando}
-          className="w-full bg-slate-800 text-white rounded-md py-2 font-medium hover:bg-slate-700 disabled:opacity-50"
+          icon={<Icon icon="mdi:play-circle-outline" />}
+          style={{ marginTop: 20 }}
         >
-          {cargando ? 'Iniciando...' : 'Ejecutar'}
-        </button>
-      </div>
+          Ejecutar
+        </Button>
+      </Card>
     </div>
   );
 }
