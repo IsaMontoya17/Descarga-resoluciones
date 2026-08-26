@@ -13,7 +13,11 @@ function App() {
     const guardado = localStorage.getItem('usuario');
     return guardado ? JSON.parse(guardado) : null;
   });
-  const [ejecucionActual, setEjecucionActual] = useState(null);
+
+  const [ejecucionActual, setEjecucionActual] = useState(() => {
+    const guardada = localStorage.getItem('ejecucionActual');
+    return guardada ? JSON.parse(guardada) : null;
+  });
 
   function cerrarSesion() {
     localStorage.removeItem('token');
@@ -22,7 +26,14 @@ function App() {
   }
 
   function manejarEjecucionIniciada(id, mes, anio) {
-    setEjecucionActual({ id, mes, anio });
+    const nueva = { id, mes, anio };
+    localStorage.setItem('ejecucionActual', JSON.stringify(nueva));
+    setEjecucionActual(nueva);
+  }
+
+  function limpiarEjecucion() {
+    localStorage.removeItem('ejecucionActual');
+    setEjecucionActual(null);
   }
 
   if (!usuario) {
@@ -43,7 +54,13 @@ function App() {
 
       <Content>
         {ejecucionActual ? (
-          <PanelMonitoreo ejecucionId={ejecucionActual.id} mes={ejecucionActual.mes} anio={ejecucionActual.anio} />
+          <PanelMonitoreo
+            ejecucionId={ejecucionActual.id}
+            mes={ejecucionActual.mes}
+            anio={ejecucionActual.anio}
+            onNuevaEjecucion={limpiarEjecucion}
+            onEjecucionInvalida={limpiarEjecucion}
+          />
         ) : (
           <PanelEjecucion onEjecucionIniciada={manejarEjecucionIniciada} />
         )}

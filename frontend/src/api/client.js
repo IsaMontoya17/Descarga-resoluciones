@@ -53,4 +53,19 @@ async function consultarEjecucion(id) {
   return data;
 }
 
-export { login, iniciarDescarga, consultarEjecucion };
+async function reintentarEnvio(id, codigos) {
+  const res = await fetch(`${API_URL}/api/descargas/${id}/reintentar-envio`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${obtenerToken()}`,
+    },
+    body: JSON.stringify({ codigos }), 
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo reintentar el envío.');
+  return data;
+}
+
+export { login, iniciarDescarga, consultarEjecucion, reintentarEnvio };

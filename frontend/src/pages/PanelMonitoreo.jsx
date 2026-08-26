@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Card, Progress, Tag, Typography, Statistic, Row, Col, Timeline, Space } from 'antd';
+import { Card, Progress, Tag, Typography, Statistic, Row, Col, Timeline, Space, Button } from 'antd';
 import { Icon } from '@iconify/react';
 import socket from '../api/socket';
-import { consultarEjecucion } from '../api/client';
+import { consultarEjecucion, reintentarEnvio } from '../api/client';
 
 const { Title, Text } = Typography;
 
@@ -18,10 +18,11 @@ const ESTATUS_TAG = {
     pendiente: { color: 'default', texto: 'Pendiente' },
 };
 
-function PanelMonitoreo({ ejecucionId, mes, anio }) {
+function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionInvalida }) {
     const [eventos, setEventos] = useState([]);
     const [estatus, setEstatus] = useState('en_progreso');
     const [reporte, setReporte] = useState(null);
+    const [reintentando, setReintentando] = useState({});
     const finRef = useRef(null);
 
     useEffect(() => {
@@ -31,7 +32,9 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
                 setEstatus(estado.estatus);
                 setReporte(estado.reporte);
             })
-            .catch(() => { });
+            .catch(() => {
+                onEjecucionInvalida?.();
+            });
 
         socket.connect();
         socket.emit('unirse_ejecucion', ejecucionId);
@@ -72,7 +75,6 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
         };
     }, [eventos]);
 
-    // --- Estadísticas de descarga ---
     const totalMunicipios = eventosDescarga.find((e) => e.tipo === 'municipios_encontrados')?.total;
     const descargaExitosos = eventosDescarga.filter((e) => e.tipo === 'descarga_ok').length;
     const descargaSinMovimiento = eventosDescarga.filter((e) => e.tipo === 'descarga_sin_datos').length;
@@ -81,7 +83,6 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
     const descargaPorcentaje = totalMunicipios ? Math.round((descargaProcesados / totalMunicipios) * 100) : 0;
     const descargaCompleta = totalMunicipios && descargaProcesados >= totalMunicipios;
 
-    // --- Estadísticas de envío ---
     const totalAEnviar = eventosEnvio.find((e) => e.tipo === 'inicio_envio')?.total;
     const envioExitosos = eventosEnvio.filter((e) => e.tipo === 'envio_ok').length;
     const envioRevisionManual = eventosEnvio.filter((e) => e.tipo === 'envio_revision_manual').length;
@@ -99,14 +100,58 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
 
     const municipiosSinMovimiento = reporte?.descarga?.sin_resoluciones ?? [];
 
+    const municipiosRevisionManual = useMemo(() => {
+        const estadoPorCodigo = new Map();
+        eventosEnvio
+            .filter((e) => e.tipo === 'envio_ok' || e.tipo === 'envio_revision_manual')
+            .forEach((e) => {
+                const clave = e.codigo ?? e.municipio;
+                estadoPorCodigo.set(clave, { tipo: e.tipo, municipio: e.municipio, codigo: e.codigo });
+            });
+        return Array.from(estadoPorCodigo.values()).filter((e) => e.tipo === 'envio_revision_manual');
+    }, [eventosEnvio]);
+
+    async function manejarReintentar(codigo) {
+        setReintentando((prev) => ({ ...prev, [codigo]: true }));
+        try {
+            await reintentarEnvio(ejecucionId, [codigo]);
+        } catch (err) {
+            
+        } finally {
+            setReintentando((prev) => ({ ...prev, [codigo]: false }));
+        }
+    }
+
+    async function manejarReintentarTodos() {
+        setReintentando((prev) => ({ ...prev, __todos__: true }));
+        try {
+            await reintentarEnvio(ejecucionId);
+        } catch (err) {
+
+        } finally {
+            setReintentando((prev) => ({ ...prev, __todos__: false }));
+        }
+    }
+
     return (
         <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', padding: '32px 16px' }}>
             <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-                <div style={{ marginBottom: 16 }}>
-                    <Title level={4} style={{ marginBottom: 4 }}>
-                        Ejecución de {MESES[mes - 1]} {anio}
-                    </Title>
-                    <Tag color={tagGeneral.color}>{tagGeneral.texto}</Tag>
+                <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <div>
+                        <Title level={4} style={{ marginBottom: 4 }}>
+                            Ejecución de {MESES[mes - 1]} {anio}
+                        </Title>
+                        <Tag color={tagGeneral.color}>{tagGeneral.texto}</Tag>
+                    </div>
+
+                    {(estatus === 'completado' || estatus === 'error') && (
+                        <Button
+                            icon={<Icon icon="mdi:plus-circle-outline" />}
+                            onClick={onNuevaEjecucion}
+                        >
+                            Nueva ejecución
+                        </Button>
+                    )}
                 </div>
 
                 <Row gutter={16}>
@@ -218,6 +263,42 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
                                 <Text type="secondary">Preparando el envío de correos...</Text>
                             )}
 
+                            {municipiosRevisionManual.length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                    <Text strong style={{ fontSize: 13 }}>Requieren revisión manual:</Text>
+                                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto' }}>
+                                        <Space size={[4, 8]} wrap>
+                                            {municipiosRevisionManual.map((m) => (
+                                                <Tag
+                                                    key={m.codigo}
+                                                    color="warning"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                                >
+                                                    {m.municipio}
+                                                    <Button
+                                                        type="link"
+                                                        size="small"
+                                                        icon={<Icon icon="mdi:refresh" />}
+                                                        loading={!!reintentando[m.codigo]}
+                                                        onClick={() => manejarReintentar(m.codigo)}
+                                                        style={{ padding: 0, height: 'auto' }}
+                                                    />
+                                                </Tag>
+                                            ))}
+                                        </Space>
+                                    </div>
+                                    <Button
+                                        size="small"
+                                        style={{ marginTop: 8 }}
+                                        icon={<Icon icon="mdi:refresh" />}
+                                        loading={!!reintentando.__todos__}
+                                        onClick={manejarReintentarTodos}
+                                    >
+                                        Reintentar todos ({municipiosRevisionManual.length})
+                                    </Button>
+                                </div>
+                            )}
+
                             {envioIniciado && (
                                 <div style={{ marginTop: 16, maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
                                     <Timeline
@@ -309,6 +390,15 @@ function PanelMonitoreo({ ejecucionId, mes, anio }) {
                                         ))}
                                     </Space>
                                 </div>
+                                <Button
+                                    size="small"
+                                    style={{ marginTop: 10 }}
+                                    icon={<Icon icon="mdi:refresh" />}
+                                    loading={!!reintentando.__todos__}
+                                    onClick={manejarReintentarTodos}
+                                >
+                                    Reintentar todos
+                                </Button>
                             </div>
                         )}
                     </Card>
