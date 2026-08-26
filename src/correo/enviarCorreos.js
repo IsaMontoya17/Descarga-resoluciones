@@ -11,16 +11,79 @@ const {
   enviarCorreoConReintentos,
 } = require('./correoBot');
 
+function obtenerSaludo() {
+  const hora = new Date().getHours();
+  return hora < 12 ? 'Buenos días' : 'Buenas tardes';
+}
+
+async function procesarEnvioMunicipio({ item, mes, anio, rutaCarpetaMes, plantilla, transportador, ejecucion, avisar }) {
+  const codigoLimpio = String(item.codigo).replace(/\D/g, '');
+
+  const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, item.municipio);
+  const destinatario = await obtenerDestinatarioMunicipio(prisma, codigoLimpio);
+
+  if (!destinatario || destinatario.para.length === 0) {
+    const error = 'Sin destinatarios configurados para este municipio.';
+    await prisma.resultadoEnvio.create({
+      data: {
+        ejecucionId: ejecucion.id,
+        municipioId: municipioDb.id,
+        estatus: 'requiere_revision_manual',
+        tipoError: error,
+      },
+    });
+    avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, codigo: item.codigo, error });
+    return { exito: false, error };
+  }
+
+  const rutaAdjunto = path.join(rutaCarpetaMes, item.archivo);
+  const datos = {
+    saludo: obtenerSaludo(),
+    mes: nombreMes(mes),
+    anio: String(anio),
+    municipio: item.municipio,
+  };
+
+  const resultado = await enviarCorreoConReintentos(transportador, {
+    destinatario,
+    plantilla,
+    datos,
+    rutaAdjunto,
+    remitenteNombre: config.EMAIL_REMITENTE_NOMBRE,
+    remitenteCorreo: config.EMAIL_USUARIO,
+  });
+
+  if (resultado.exito) {
+    await prisma.resultadoEnvio.create({
+      data: {
+        ejecucionId: ejecucion.id,
+        municipioId: municipioDb.id,
+        estatus: 'exitoso',
+        intentos: resultado.intentos,
+      },
+    });
+    avisar({ tipo: 'envio_ok', municipio: item.municipio, codigo: item.codigo, intentos: resultado.intentos });
+    return { exito: true, intentos: resultado.intentos };
+  }
+
+  await prisma.resultadoEnvio.create({
+    data: {
+      ejecucionId: ejecucion.id,
+      municipioId: municipioDb.id,
+      estatus: 'requiere_revision_manual',
+      tipoError: resultado.error,
+      intentos: resultado.intentos,
+    },
+  });
+  avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, codigo: item.codigo, error: resultado.error });
+  return { exito: false, error: resultado.error, intentos: resultado.intentos };
+}
+
 async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   const avisar = (evento) => {
     console.log(evento);
     if (onProgreso) onProgreso(evento);
   };
-
-  function obtenerSaludo() {
-    const hora = new Date().getHours();
-    return hora < 12 ? 'Buenos días' : 'Buenas tardes';
-  }
 
   const rutaCarpetaMes = path.resolve(config.CARPETA_PRINCIPAL, `${nombreMes(mes)}_${anio}`);
   const rutaReporteDescarga = path.join(rutaCarpetaMes, '_reporte_descarga.json');
@@ -76,68 +139,24 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
 
   for (let i = 0; i < municipiosAEnviar.length; i++) {
     const item = municipiosAEnviar[i];
-    const codigoLimpio = String(item.codigo).replace(/\D/g, '');
 
-    avisar({ tipo: 'enviando', indice: i + 1, total: municipiosAEnviar.length, municipio: item.municipio });
+    avisar({ tipo: 'enviando', indice: i + 1, total: municipiosAEnviar.length, municipio: item.municipio, codigo: item.codigo });
 
-    const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, item.municipio);
-    const destinatario = await obtenerDestinatarioMunicipio(prisma, codigoLimpio);
-
-    if (!destinatario || destinatario.para.length === 0) {
-      const error = 'Sin destinatarios configurados para este municipio.';
-      reporteEnvio.requieren_revision_manual.push({ municipio: item.municipio, codigo: item.codigo, error });
-      await prisma.resultadoEnvio.create({
-        data: {
-          ejecucionId: ejecucion.id,
-          municipioId: municipioDb.id,
-          estatus: 'requiere_revision_manual',
-          tipoError: error,
-        },
-      });
-      avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, error });
-      continue;
-    }
-
-    const rutaAdjunto = path.join(rutaCarpetaMes, item.archivo);
-    const datos = {
-      saludo: obtenerSaludo(),
-      mes: nombreMes(mes),
-      anio: String(anio),
-      municipio: item.municipio,
-    };
-
-    const resultado = await enviarCorreoConReintentos(transportador, {
-      destinatario,
+    const resultado = await procesarEnvioMunicipio({
+      item,
+      mes,
+      anio,
+      rutaCarpetaMes,
       plantilla,
-      datos,
-      rutaAdjunto,
-      remitenteNombre: config.EMAIL_REMITENTE_NOMBRE,
-      remitenteCorreo: config.EMAIL_USUARIO,
+      transportador,
+      ejecucion,
+      avisar,
     });
 
     if (resultado.exito) {
       reporteEnvio.exitosos.push({ municipio: item.municipio, codigo: item.codigo, intentos: resultado.intentos });
-      await prisma.resultadoEnvio.create({
-        data: {
-          ejecucionId: ejecucion.id,
-          municipioId: municipioDb.id,
-          estatus: 'exitoso',
-          intentos: resultado.intentos,
-        },
-      });
-      avisar({ tipo: 'envio_ok', municipio: item.municipio, intentos: resultado.intentos });
     } else {
       reporteEnvio.requieren_revision_manual.push({ municipio: item.municipio, codigo: item.codigo, error: resultado.error });
-      await prisma.resultadoEnvio.create({
-        data: {
-          ejecucionId: ejecucion.id,
-          municipioId: municipioDb.id,
-          estatus: 'requiere_revision_manual',
-          tipoError: resultado.error,
-          intentos: resultado.intentos,
-        },
-      });
-      avisar({ tipo: 'envio_revision_manual', municipio: item.municipio, error: resultado.error });
     }
   }
 
@@ -162,6 +181,122 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   return reporteEnvio;
 }
 
+async function reintentarEnvioMunicipios(mes, anio, codigos, { onProgreso } = {}) {
+  const avisar = (evento) => {
+    console.log(evento);
+    if (onProgreso) onProgreso(evento);
+  };
+
+  if (!Array.isArray(codigos) || codigos.length === 0) {
+    throw new Error('Debes indicar al menos un código de municipio para reintentar.');
+  }
+
+  const rutaCarpetaMes = path.resolve(config.CARPETA_PRINCIPAL, `${nombreMes(mes)}_${anio}`);
+  const rutaReporteDescarga = path.join(rutaCarpetaMes, '_reporte_descarga.json');
+  const rutaReporteEnvio = path.join(rutaCarpetaMes, '_reporte_envio.json');
+
+  if (!fs.existsSync(rutaReporteDescarga) || !fs.existsSync(rutaReporteEnvio)) {
+    throw new Error(
+      `No se encontraron los reportes de ${nombreMes(mes)}_${anio}. No se puede reintentar el envío sin una ejecución previa completa.`
+    );
+  }
+
+  const reporteDescarga = cargarJSON(rutaReporteDescarga);
+  const reporteEnvio = cargarJSON(rutaReporteEnvio);
+
+  const ejecucion = await prisma.ejecucion.findFirst({
+    where: { mes, anio },
+    orderBy: { id: 'desc' },
+  });
+
+  if (!ejecucion) {
+    throw new Error(`No se encontró una ejecución registrada para ${nombreMes(mes)}/${anio} en la base de datos.`);
+  }
+
+  const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
+  const plantilla = cargarJSON(rutaPlantilla);
+
+  if (!plantilla.asunto || !plantilla.cuerpo) {
+    throw new Error(
+      `La plantilla de correo (${rutaPlantilla}) está incompleta: debe tener las claves "asunto" y "cuerpo" con contenido.`
+    );
+  }
+
+  const transportador = crearTransportador(config);
+
+  const codigosObjetivo = new Set(codigos.map(String));
+
+  const municipiosAReintentar = reporteEnvio.requieren_revision_manual.filter((m) =>
+    codigosObjetivo.has(String(m.codigo))
+  );
+
+  if (municipiosAReintentar.length === 0) {
+    throw new Error('Ninguno de los códigos solicitados está actualmente pendiente de revisión manual.');
+  }
+
+  avisar({ tipo: 'inicio_reintento_envio', total: municipiosAReintentar.length });
+
+  for (let i = 0; i < municipiosAReintentar.length; i++) {
+    const pendiente = municipiosAReintentar[i];
+
+    const item = reporteDescarga.exitosos.find((m) => String(m.codigo) === String(pendiente.codigo));
+
+    if (!item) {
+      avisar({
+        tipo: 'envio_revision_manual',
+        municipio: pendiente.municipio,
+        codigo: pendiente.codigo,
+        error: 'No se encontró el archivo descargado original para reintentar el envío.',
+      });
+      continue;
+    }
+
+    avisar({
+      tipo: 'reintentando_envio',
+      indice: i + 1,
+      total: municipiosAReintentar.length,
+      municipio: item.municipio,
+      codigo: item.codigo,
+    });
+
+    const resultado = await procesarEnvioMunicipio({
+      item,
+      mes,
+      anio,
+      rutaCarpetaMes,
+      plantilla,
+      transportador,
+      ejecucion,
+      avisar,
+    });
+
+    reporteEnvio.requieren_revision_manual = reporteEnvio.requieren_revision_manual.filter(
+      (m) => String(m.codigo) !== String(item.codigo)
+    );
+
+    if (resultado.exito) {
+      reporteEnvio.exitosos.push({ municipio: item.municipio, codigo: item.codigo, intentos: resultado.intentos });
+    } else {
+      reporteEnvio.requieren_revision_manual.push({ municipio: item.municipio, codigo: item.codigo, error: resultado.error });
+    }
+  }
+
+  fs.writeFileSync(rutaReporteEnvio, JSON.stringify(reporteEnvio, null, 2), 'utf-8');
+
+  const siguenPendientes = municipiosAReintentar.filter((m) =>
+    reporteEnvio.requieren_revision_manual.some((p) => String(p.codigo) === String(m.codigo))
+  ).length;
+
+  avisar({
+    tipo: 'finalizado_reintento',
+    total: municipiosAReintentar.length,
+    exitosos: municipiosAReintentar.length - siguenPendientes,
+    pendientes: siguenPendientes,
+  });
+
+  return reporteEnvio;
+}
+
 if (require.main === module) {
   const [, , mesArg, anioArg] = process.argv;
   const mes = parseInt(mesArg, 10);
@@ -178,4 +313,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ejecutarEnvioCorreos };
+module.exports = { ejecutarEnvioCorreos, reintentarEnvioMunicipios };
