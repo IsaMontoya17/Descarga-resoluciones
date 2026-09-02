@@ -79,3 +79,12 @@ model CorreoMunicipio {
 
   @@map("correos_municipio")
 }
+
+model PlantillaCorreo {
+  id            Int      @id @default(autoincrement())
+  asunto        String   @db.Text
+  cuerpo        String   @db.Text
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@map("plantilla_correo")
+}

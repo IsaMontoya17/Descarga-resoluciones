@@ -16,6 +16,23 @@ function obtenerSaludo() {
   return hora < 12 ? 'Buenos días' : 'Buenas tardes';
 }
 
+// La plantilla del asunto y el cuerpo del correo (RF-25) vive en la tabla
+// plantilla_correo y se administra desde el Panel de Administración. Se
+// trata como configuración global de fila única: siempre se usa la primera
+// que exista.
+async function obtenerPlantillaActiva() {
+  const plantilla = await prisma.plantillaCorreo.findFirst({ orderBy: { id: 'asc' } });
+
+  if (!plantilla || !plantilla.asunto || !plantilla.cuerpo) {
+    throw new Error(
+      'No hay una plantilla de correo configurada en la base de datos. ' +
+      'Configúrala desde el Panel de Administración antes de enviar correos.'
+    );
+  }
+
+  return plantilla;
+}
+
 async function procesarEnvioMunicipio({ item, mes, anio, rutaCarpetaMes, plantilla, transportador, ejecucion, avisar }) {
   const codigoLimpio = String(item.codigo).replace(/\D/g, '');
 
@@ -120,23 +137,7 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso, ejecucionId = null 
 
   const reporteDescarga = cargarJSON(rutaReporteDescarga);
   const ejecucion = await obtenerEjecucion(mes, anio, ejecucionId);
-
-  const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
-
-  let plantilla;
-  try {
-    plantilla = cargarJSON(rutaPlantilla);
-  } catch (err) {
-    throw new Error(
-      `No se pudo cargar la plantilla de correo (${rutaPlantilla}). Verifica que el archivo exista y tenga un formato JSON válido. Detalle: ${err.message}`
-    );
-  }
-
-  if (!plantilla.asunto || !plantilla.cuerpo) {
-    throw new Error(
-      `La plantilla de correo (${rutaPlantilla}) está incompleta: debe tener las claves "asunto" y "cuerpo" con contenido. Revisa el archivo antes de continuar.`
-    );
-  }
+  const plantilla = await obtenerPlantillaActiva();
 
   const transportador = crearTransportador(config);
 
@@ -217,15 +218,7 @@ async function reintentarEnvioMunicipios(mes, anio, codigos, { onProgreso, ejecu
   const reporteDescarga = cargarJSON(rutaReporteDescarga);
   const reporteEnvio = cargarJSON(rutaReporteEnvio);
   const ejecucion = await obtenerEjecucion(mes, anio, ejecucionId);
-
-  const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
-  const plantilla = cargarJSON(rutaPlantilla);
-
-  if (!plantilla.asunto || !plantilla.cuerpo) {
-    throw new Error(
-      `La plantilla de correo (${rutaPlantilla}) está incompleta: debe tener las claves "asunto" y "cuerpo" con contenido.`
-    );
-  }
+  const plantilla = await obtenerPlantillaActiva();
 
   const transportador = crearTransportador(config);
 

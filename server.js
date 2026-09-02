@@ -8,6 +8,7 @@ const { ejecutarEnvioCorreos, reintentarEnvioMunicipios } = require('./src/corre
 const { login } = require('./src/auth/authController');
 const { verificarToken, requiereRol } = require('./src/auth/authMiddleware');
 const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/admin/municipiosAdminController');
+const { obtenerPlantilla, actualizarPlantilla } = require('./src/admin/plantillaAdminController');
 
 const app = express();
 app.use(express.json());
@@ -291,6 +292,8 @@ app.post('/api/descargas/:id/reintentar-envio', verificarToken, async (req, res)
  */
 app.get('/api/admin/municipios', verificarToken, requiereRol('administrador'), listarMunicipios);
 app.put('/api/admin/municipios/:id/correos', verificarToken, requiereRol('administrador'), actualizarCorreosMunicipio);
+app.get('/api/admin/plantilla', verificarToken, requiereRol('administrador'), obtenerPlantilla);
+app.put('/api/admin/plantilla', verificarToken, requiereRol('administrador'), actualizarPlantilla);
 
 const PUERTO = process.env.PUERTO || 3000;
 server.listen(PUERTO, () => {
