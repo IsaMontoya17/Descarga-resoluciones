@@ -19,6 +19,16 @@ const {
   finalizarDescarga,
 } = require('./resolucionesBot');
 
+// BCGS entrega el nombre del municipio en el <option> con el formato
+// "(código) NOMBRE" (ej. "(002) ABEJORRAL"). El código ya se guarda por
+// separado en codigoBcgs, así que se limpia el prefijo antes de usarlo en
+// cualquier lado (BD, eventos de progreso, reporte) para no duplicarlo.
+const REGEX_PREFIJO_CODIGO = /^\(\d+\)\s*/;
+
+function limpiarNombreMunicipio(nombre) {
+  return nombre.replace(REGEX_PREFIJO_CODIGO, '').trim();
+}
+
 async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = false, ejecucionId = null } = {}) {
   const avisar = (evento) => {
     console.log(evento);
@@ -73,15 +83,17 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
     for (let i = 0; i < municipios.length; i++) {
       const municipio = municipios[i];
       const codigoLimpio = String(municipio.value).replace(/\D/g, '');
-      avisar({ tipo: 'descargando', indice: i + 1, total: municipios.length, municipio: municipio.nombre });
+      const nombreLimpio = limpiarNombreMunicipio(municipio.nombre);
 
-      const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, municipio.nombre);
+      avisar({ tipo: 'descargando', indice: i + 1, total: municipios.length, municipio: nombreLimpio });
+
+      const municipioDb = await obtenerOCrearMunicipio(prisma, codigoLimpio, nombreLimpio);
 
       try {
         const resultado = await descargarResolucionMunicipio(page, municipio, rutaCarpetaMes);
 
         if (resultado === 'SIN_RESOLUCIONES') {
-          reporte.sin_resoluciones.push({ municipio: municipio.nombre, codigo: municipio.value });
+          reporte.sin_resoluciones.push({ municipio: nombreLimpio, codigo: municipio.value });
           await prisma.resultadoDescarga.create({
             data: {
               ejecucionId: ejecucion.id,
@@ -89,9 +101,9 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
               estatus: 'sin_resoluciones',
             },
           });
-          avisar({ tipo: 'descarga_sin_datos', municipio: municipio.nombre });
+          avisar({ tipo: 'descarga_sin_datos', municipio: nombreLimpio });
         } else {
-          reporte.exitosos.push({ municipio: municipio.nombre, codigo: municipio.value, archivo: resultado });
+          reporte.exitosos.push({ municipio: nombreLimpio, codigo: municipio.value, archivo: resultado });
           await prisma.resultadoDescarga.create({
             data: {
               ejecucionId: ejecucion.id,
@@ -100,10 +112,10 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
               archivo: resultado,
             },
           });
-          avisar({ tipo: 'descarga_ok', municipio: municipio.nombre, archivo: resultado });
+          avisar({ tipo: 'descarga_ok', municipio: nombreLimpio, archivo: resultado });
         }
       } catch (err) {
-        reporte.fallidos.push({ municipio: municipio.nombre, codigo: municipio.value, error: err.message });
+        reporte.fallidos.push({ municipio: nombreLimpio, codigo: municipio.value, error: err.message });
         await prisma.resultadoDescarga.create({
           data: {
             ejecucionId: ejecucion.id,
@@ -112,7 +124,7 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
             error: err.message,
           },
         });
-        avisar({ tipo: 'descarga_error', municipio: municipio.nombre, error: err.message });
+        avisar({ tipo: 'descarga_error', municipio: nombreLimpio, error: err.message });
       }
     }
 
