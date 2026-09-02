@@ -39,6 +39,31 @@ async function iniciarDescarga(mes, anio) {
   return data;
 }
 
+async function obtenerPlantillaCorreo() {
+  const res = await fetch(`${API_URL}/api/admin/plantilla`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener la plantilla de correo.');
+  return data;
+}
+
+async function actualizarPlantillaCorreo(asunto, cuerpo) {
+  const res = await fetch(`${API_URL}/api/admin/plantilla`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${obtenerToken()}`,
+    },
+    body: JSON.stringify({ asunto, cuerpo }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo actualizar la plantilla de correo.');
+  return data;
+}
+
 async function consultarEjecucion(id) {
   const res = await fetch(`${API_URL}/api/descargas/${id}`, {
     headers: { Authorization: `Bearer ${obtenerToken()}` },
@@ -100,4 +125,6 @@ export {
   reintentarEnvio,
   listarMunicipiosAdmin,
   actualizarCorreosMunicipio,
+  obtenerPlantillaCorreo,
+  actualizarPlantillaCorreo,
 };

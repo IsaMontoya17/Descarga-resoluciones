@@ -1,11 +1,24 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Input, Button, Modal, Form, Select, Tag, Typography, Space, message, Tooltip } from 'antd';
+import { Table, Input, Button, Modal, Form, Select, Tag, Typography, Space, message, Tooltip, Tabs, Alert } from 'antd';
 import { Icon } from '@iconify/react';
-import { listarMunicipiosAdmin, actualizarCorreosMunicipio } from '../api/client';
+import {
+    listarMunicipiosAdmin,
+    actualizarCorreosMunicipio,
+    obtenerPlantillaCorreo,
+    actualizarPlantillaCorreo,
+} from '../api/client';
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const VARIABLES_DISPONIBLES = [
+    { clave: '{saludo}', descripcion: 'Buenos días / Buenas tardes (automático)' },
+    { clave: '{mes}', descripcion: 'Nombre del mes en español' },
+    { clave: '{anio}', descripcion: 'Año de la ejecución' },
+    { clave: '{municipio}', descripcion: 'Nombre del municipio' },
+];
 
 function validarListaCorreos(_, lista) {
     if (!Array.isArray(lista) || lista.length === 0) return Promise.resolve();
@@ -29,7 +42,7 @@ function CeldaCorreos({ lista, color }) {
     );
 }
 
-function PanelAdministracion() {
+function TabCorreosMunicipio() {
     const [municipios, setMunicipios] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [busqueda, setBusqueda] = useState('');
@@ -146,35 +159,27 @@ function PanelAdministracion() {
     ];
 
     return (
-        <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', padding: '32px 16px' }}>
-            <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-                <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                        <Title level={4} style={{ marginBottom: 4 }}>
-                            <Icon icon="mdi:email-edit-outline" style={{ marginRight: 8 }} />
-                            Administración de correos por municipio
-                        </Title>
-                        <Text type="secondary" style={{ fontSize: 13 }}>
-                            {municipios.length} municipios registrados
-                        </Text>
-                    </div>
-                    <Input.Search
-                        placeholder="Buscar por nombre o código..."
-                        allowClear
-                        style={{ width: 280 }}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                    />
-                </div>
-
-                <Table
-                    rowKey="id"
-                    columns={columnas}
-                    dataSource={municipiosFiltrados}
-                    loading={cargando}
-                    pagination={{ pageSize: 15, showSizeChanger: false }}
-                    style={{ background: '#fff', borderRadius: 8 }}
+        <>
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                    {municipios.length} municipios registrados
+                </Text>
+                <Input.Search
+                    placeholder="Buscar por nombre o código..."
+                    allowClear
+                    style={{ width: 280 }}
+                    onChange={(e) => setBusqueda(e.target.value)}
                 />
             </div>
+
+            <Table
+                rowKey="id"
+                columns={columnas}
+                dataSource={municipiosFiltrados}
+                loading={cargando}
+                pagination={{ pageSize: 15, showSizeChanger: false }}
+                style={{ background: '#fff', borderRadius: 8 }}
+            />
 
             <Modal
                 title={municipioEditando ? `Correos de ${municipioEditando.nombre}` : ''}
@@ -212,6 +217,114 @@ function PanelAdministracion() {
                     </Form.Item>
                 </Form>
             </Modal>
+        </>
+    );
+}
+
+function TabPlantillaCorreo() {
+    const [cargando, setCargando] = useState(true);
+    const [guardando, setGuardando] = useState(false);
+    const [form] = Form.useForm();
+
+    function cargarPlantilla() {
+        setCargando(true);
+        obtenerPlantillaCorreo()
+            .then((data) => form.setFieldsValue({ asunto: data.asunto, cuerpo: data.cuerpo }))
+            .catch((err) => message.error(err.message))
+            .finally(() => setCargando(false));
+    }
+
+    useEffect(() => {
+        cargarPlantilla();
+    }, []);
+
+    async function guardar() {
+        try {
+            const valores = await form.validateFields();
+            setGuardando(true);
+            await actualizarPlantillaCorreo(valores.asunto, valores.cuerpo);
+            message.success('Plantilla de correo actualizada.');
+        } catch (err) {
+            if (err?.errorFields) return;
+            message.error(err.message || 'No se pudo guardar la plantilla.');
+        } finally {
+            setGuardando(false);
+        }
+    }
+
+    return (
+        <div style={{ maxWidth: 700 }}>
+            <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 20 }}
+                message="Variables disponibles"
+                description={
+                    <Space direction="vertical" size={2}>
+                        {VARIABLES_DISPONIBLES.map((v) => (
+                            <Text key={v.clave} style={{ fontSize: 13 }}>
+                                <Text code>{v.clave}</Text> — {v.descripcion}
+                            </Text>
+                        ))}
+                    </Space>
+                }
+            />
+
+            <Form form={form} layout="vertical" disabled={cargando}>
+                <Form.Item
+                    name="asunto"
+                    label="Asunto"
+                    rules={[{ required: true, message: 'El asunto no puede estar vacío.' }]}
+                >
+                    <Input placeholder="Entrega de los movimientos generados en el mes de {mes} de {anio}..." />
+                </Form.Item>
+
+                <Form.Item
+                    name="cuerpo"
+                    label="Cuerpo del mensaje"
+                    rules={[{ required: true, message: 'El cuerpo no puede estar vacío.' }]}
+                >
+                    <TextArea rows={10} placeholder="{saludo}, ..." />
+                </Form.Item>
+
+                <Button type="primary" loading={guardando} onClick={guardar}>
+                    Guardar plantilla
+                </Button>
+            </Form>
+        </div>
+    );
+}
+
+function PanelAdministracion() {
+    return (
+        <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', padding: '32px 16px' }}>
+            <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+                <div style={{ marginBottom: 16 }}>
+                    <Title level={4} style={{ marginBottom: 4 }}>
+                        <Icon icon="mdi:email-edit-outline" style={{ marginRight: 8 }} />
+                        Panel de Administración
+                    </Title>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                        Gestión de correos por municipio y plantilla de envío
+                    </Text>
+                </div>
+
+                <Tabs
+                    defaultActiveKey="municipios"
+                    items={[
+                        {
+                            key: 'municipios',
+                            label: 'Correos por municipio',
+                            children: <TabCorreosMunicipio />,
+                        },
+                        {
+                            key: 'plantilla',
+                            label: 'Plantilla de correo',
+                            children: <TabPlantillaCorreo />,
+                        },
+                    ]}
+                />
+            </div>
         </div>
     );
 }
