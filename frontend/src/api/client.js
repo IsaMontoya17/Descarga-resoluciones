@@ -60,7 +60,7 @@ async function reintentarEnvio(id, codigos) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${obtenerToken()}`,
     },
-    body: JSON.stringify({ codigos }), 
+    body: JSON.stringify({ codigos }),
   });
 
   const data = await res.json();
@@ -68,4 +68,36 @@ async function reintentarEnvio(id, codigos) {
   return data;
 }
 
-export { login, iniciarDescarga, consultarEjecucion, reintentarEnvio };
+async function listarMunicipiosAdmin() {
+  const res = await fetch(`${API_URL}/api/admin/municipios`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de municipios.');
+  return data;
+}
+
+async function actualizarCorreosMunicipio(id, correos) {
+  const res = await fetch(`${API_URL}/api/admin/municipios/${id}/correos`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${obtenerToken()}`,
+    },
+    body: JSON.stringify({ correos }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo actualizar los correos del municipio.');
+  return data;
+}
+
+export {
+  login,
+  iniciarDescarga,
+  consultarEjecucion,
+  reintentarEnvio,
+  listarMunicipiosAdmin,
+  actualizarCorreosMunicipio,
+};

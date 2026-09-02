@@ -6,7 +6,8 @@ const prisma = require('./src/config/prisma');
 const { ejecutarDescargaResoluciones } = require('./src/automatizacion-bcgs/descargarResoluciones');
 const { ejecutarEnvioCorreos, reintentarEnvioMunicipios } = require('./src/correo/enviarCorreos');
 const { login } = require('./src/auth/authController');
-const { verificarToken } = require('./src/auth/authMiddleware');
+const { verificarToken, requiereRol } = require('./src/auth/authMiddleware');
+const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/admin/municipiosAdminController');
 
 const app = express();
 app.use(express.json());
@@ -281,6 +282,15 @@ app.post('/api/descargas/:id/reintentar-envio', verificarToken, async (req, res)
 
   res.status(202).json({ mensaje: 'Reintento de envío iniciado.', codigos: codigosObjetivo });
 });
+
+/**
+ * GET /api/admin/municipios
+ * PUT /api/admin/municipios/:id/correos
+ * Panel de Administración (RF-24): gestión de correos de contacto por
+ * municipio. Restringido al rol "administrador".
+ */
+app.get('/api/admin/municipios', verificarToken, requiereRol('administrador'), listarMunicipios);
+app.put('/api/admin/municipios/:id/correos', verificarToken, requiereRol('administrador'), actualizarCorreosMunicipio);
 
 const PUERTO = process.env.PUERTO || 3000;
 server.listen(PUERTO, () => {
