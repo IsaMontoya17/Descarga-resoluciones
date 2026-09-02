@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import Login from './pages/Login';
 import PanelEjecucion from './pages/PanelEjecucion';
 import PanelMonitoreo from './pages/PanelMonitoreo';
+import PanelAdministracion from './pages/PanelAdministracion';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -18,6 +19,10 @@ function App() {
     const guardada = localStorage.getItem('ejecucionActual');
     return guardada ? JSON.parse(guardada) : null;
   });
+
+  // 'principal' = flujo normal (PanelEjecucion / PanelMonitoreo)
+  // 'admin'     = Panel de Administración de correos por municipio (RF-24)
+  const [vista, setVista] = useState('principal');
 
   function cerrarSesion() {
     localStorage.removeItem('token');
@@ -40,6 +45,8 @@ function App() {
     return <Login onLoginExitoso={setUsuario} />;
   }
 
+  const esAdministrador = usuario.rol === 'administrador';
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid #e2e8f0' }}>
@@ -47,13 +54,37 @@ function App() {
           <Avatar icon={<Icon icon="mdi:account-outline" />} />
           <Text>{usuario.nombre} <Text type="secondary">({usuario.rol})</Text></Text>
         </Space>
-        <Button type="text" icon={<Icon icon="mdi:logout" />} onClick={cerrarSesion}>
-          Cerrar sesión
-        </Button>
+
+        <Space>
+          {esAdministrador && (
+            vista === 'principal' ? (
+              <Button
+                type="text"
+                icon={<Icon icon="mdi:email-edit-outline" />}
+                onClick={() => setVista('admin')}
+              >
+                Administración de correos
+              </Button>
+            ) : (
+              <Button
+                type="text"
+                icon={<Icon icon="mdi:arrow-left" />}
+                onClick={() => setVista('principal')}
+              >
+                Volver
+              </Button>
+            )
+          )}
+          <Button type="text" icon={<Icon icon="mdi:logout" />} onClick={cerrarSesion}>
+            Cerrar sesión
+          </Button>
+        </Space>
       </Header>
 
       <Content>
-        {ejecucionActual ? (
+        {vista === 'admin' ? (
+          <PanelAdministracion />
+        ) : ejecucionActual ? (
           <PanelMonitoreo
             ejecucionId={ejecucionActual.id}
             mes={ejecucionActual.mes}
