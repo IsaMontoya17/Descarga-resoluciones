@@ -18,4 +18,16 @@ function verificarToken(req, res, next) {
   }
 }
 
-module.exports = { verificarToken };
+function requiereRol(...rolesPermitidos) {
+  return (req, res, next) => {
+    if (!req.usuario) {
+      return res.status(401).json({ error: 'No se proporcionó un token de autenticación.' });
+    }
+    if (!rolesPermitidos.includes(req.usuario.rol)) {
+      return res.status(403).json({ error: 'No tienes permisos para realizar esta acción.' });
+    }
+    next();
+  };
+}
+
+module.exports = { verificarToken, requiereRol };
