@@ -10,3 +10,4 @@ envio_correos_mensuales/
 
 destinatariosPrueba.json
 /src/generated/prisma
+crearUsuario.js
