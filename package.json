@@ -4,10 +4,9 @@
   "description": "Automatización de descarga y envío de resoluciones BCGS - Gerencia de Catastro",
   "main": "server.js",
   "scripts": {
-    "descargar": "node descargarResoluciones.js",
-    "enviar": "node enviarCorreos.js",
-    "servidor": "node server.js",
-    "interactivo": "node ejecutarInteractivo.js"
+    "descargar": "node src/automatizacion-bcgs/descargarResoluciones.js",
+    "enviar": "node src/correo/enviarCorreos.js",
+    "servidor": "node server.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
