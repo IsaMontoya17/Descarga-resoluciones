@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Card, Progress, Tag, Typography, Statistic, Row, Col, Timeline, Space, Button } from 'antd';
+import { Card, Progress, Tag, Typography, Statistic, Row, Col, Timeline, Space, Button, Alert } from 'antd';
 import { Icon } from '@iconify/react';
 import socket from '../api/socket';
 import { consultarEjecucion, reintentarEnvio } from '../api/client';
@@ -16,6 +16,8 @@ const ESTATUS_TAG = {
     error: { color: 'error', texto: 'Error' },
     en_progreso: { color: 'processing', texto: 'En progreso' },
     pendiente: { color: 'default', texto: 'Pendiente' },
+    interrumpido: { color: 'error', texto: 'Interrumpida' },
+    no_iniciado: { color: 'default', texto: 'No iniciada' },
 };
 
 function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionInvalida }) {
@@ -63,44 +65,100 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
         finRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [eventos]);
 
+    // Tres situaciones posibles:
+    // - 'ninguna': hay eventos en vivo (Socket.io) — flujo normal, sin reconstrucción.
+    // - 'completa': no hay eventos en vivo (se perdieron al reiniciar el servidor)
+    //   pero la ejecución sí llegó a 'completado' — el reporte final es confiable.
+    // - 'interrumpida': no hay eventos en vivo Y la ejecución quedó en 'error'
+    //   porque el servidor se reinició a mitad de camino — el reporte solo
+    //   refleja lo que alcanzó a procesarse, no el total real (113 municipios).
+    const estadoReconstruccion = useMemo(() => {
+        if (eventos.length > 0 || !reporte) return 'ninguna';
+        return reporte.parcial ? 'interrumpida' : 'completa';
+    }, [eventos, reporte]);
+
+    const reconstruido = estadoReconstruccion !== 'ninguna';
+    const interrumpida = estadoReconstruccion === 'interrumpida';
+
     const { eventosDescarga, eventosEnvio, envioIniciado } = useMemo(() => {
         const indiceCorte = eventos.findIndex((e) => e.tipo === 'iniciando_envio_correos');
         if (indiceCorte === -1) {
-            return { eventosDescarga: eventos, eventosEnvio: [], envioIniciado: false };
+            const envioYaOcurrio = estadoReconstruccion === 'completa' && !!reporte?.envio;
+            return { eventosDescarga: eventos, eventosEnvio: [], envioIniciado: envioYaOcurrio };
         }
         return {
             eventosDescarga: eventos.slice(0, indiceCorte),
             eventosEnvio: eventos.slice(indiceCorte + 1),
             envioIniciado: true,
         };
-    }, [eventos]);
+    }, [eventos, reporte, estadoReconstruccion]);
 
-    const totalMunicipios = eventosDescarga.find((e) => e.tipo === 'municipios_encontrados')?.total;
-    const descargaExitosos = eventosDescarga.filter((e) => e.tipo === 'descarga_ok').length;
-    const descargaSinMovimiento = eventosDescarga.filter((e) => e.tipo === 'descarga_sin_datos').length;
-    const descargaFallos = eventosDescarga.filter((e) => e.tipo === 'descarga_error').length;
+    const totalMunicipios = estadoReconstruccion === 'completa'
+        ? (reporte.descarga?.exitosos?.length ?? 0) +
+          (reporte.descarga?.sin_resoluciones?.length ?? 0) +
+          (reporte.descarga?.fallidos?.length ?? 0)
+        : eventosDescarga.find((e) => e.tipo === 'municipios_encontrados')?.total;
+
+    const descargaExitosos = reconstruido
+        ? reporte.descarga?.exitosos?.length ?? 0
+        : eventosDescarga.filter((e) => e.tipo === 'descarga_ok').length;
+    const descargaSinMovimiento = reconstruido
+        ? reporte.descarga?.sin_resoluciones?.length ?? 0
+        : eventosDescarga.filter((e) => e.tipo === 'descarga_sin_datos').length;
+    const descargaFallos = reconstruido
+        ? reporte.descarga?.fallidos?.length ?? 0
+        : eventosDescarga.filter((e) => e.tipo === 'descarga_error').length;
     const descargaProcesados = descargaExitosos + descargaSinMovimiento + descargaFallos;
     const descargaPorcentaje = totalMunicipios ? Math.round((descargaProcesados / totalMunicipios) * 100) : 0;
     const descargaCompleta = totalMunicipios && descargaProcesados >= totalMunicipios;
 
-    const totalAEnviar = eventosEnvio.find((e) => e.tipo === 'inicio_envio')?.total;
-    const envioExitosos = eventosEnvio.filter((e) => e.tipo === 'envio_ok').length;
-    const envioRevisionManual = eventosEnvio.filter((e) => e.tipo === 'envio_revision_manual').length;
+    const rangoFechas = useMemo(() => {
+        const eventoFechas = eventosDescarga.find((e) => e.tipo === 'fechas_establecidas');
+        if (eventoFechas) {
+            return { fechaInicial: eventoFechas.fechaInicial, fechaFinal: eventoFechas.fechaFinal };
+        }
+        return null;
+    }, [eventosDescarga]);
+
+    const totalAEnviar = estadoReconstruccion === 'completa'
+        ? (reporte.envio?.exitosos?.length ?? 0) + (reporte.envio?.requieren_revision_manual?.length ?? 0)
+        : eventosEnvio.find((e) => e.tipo === 'inicio_envio')?.total;
+    const envioExitosos = reconstruido
+        ? reporte.envio?.exitosos?.length ?? 0
+        : eventosEnvio.filter((e) => e.tipo === 'envio_ok').length;
+    const envioRevisionManual = reconstruido
+        ? reporte.envio?.requieren_revision_manual?.length ?? 0
+        : eventosEnvio.filter((e) => e.tipo === 'envio_revision_manual').length;
     const envioProcesados = envioExitosos + envioRevisionManual;
     const envioPorcentaje = totalAEnviar ? Math.round((envioProcesados / totalAEnviar) * 100) : 0;
 
-    const estatusDescarga = descargaCompleta ? 'completado' : 'en_progreso';
-    const estatusEnvio = !envioIniciado
-        ? 'pendiente'
-        : reporte?.envio
-            ? 'completado'
-            : 'en_progreso';
+    let estatusDescarga;
+    let estatusEnvio;
+
+    if (interrumpida) {
+        estatusDescarga = 'interrumpido';
+        estatusEnvio = reporte.envioIniciado ? 'interrumpido' : 'no_iniciado';
+    } else {
+        estatusDescarga = descargaCompleta ? 'completado' : 'en_progreso';
+        estatusEnvio = !envioIniciado
+            ? 'pendiente'
+            : reporte?.envio
+                ? 'completado'
+                : 'en_progreso';
+    }
 
     const tagGeneral = ESTATUS_TAG[estatus] || ESTATUS_TAG.en_progreso;
 
     const municipiosSinMovimiento = reporte?.descarga?.sin_resoluciones ?? [];
 
     const municipiosRevisionManual = useMemo(() => {
+        if (reconstruido) {
+            return (reporte.envio?.requieren_revision_manual ?? []).map((m) => ({
+                tipo: 'envio_revision_manual',
+                municipio: m.municipio,
+                codigo: m.codigo,
+            }));
+        }
         const estadoPorCodigo = new Map();
         eventosEnvio
             .filter((e) => e.tipo === 'envio_ok' || e.tipo === 'envio_revision_manual')
@@ -109,7 +167,7 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                 estadoPorCodigo.set(clave, { tipo: e.tipo, municipio: e.municipio, codigo: e.codigo });
             });
         return Array.from(estadoPorCodigo.values()).filter((e) => e.tipo === 'envio_revision_manual');
-    }, [eventosEnvio]);
+    }, [eventosEnvio, reconstruido, reporte]);
 
     async function manejarReintentar(codigo) {
         setReintentando((prev) => ({ ...prev, [codigo]: true }));
@@ -141,7 +199,14 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                         <Title level={4} style={{ marginBottom: 4 }}>
                             Ejecución de {MESES[mes - 1]} {anio}
                         </Title>
-                        <Tag color={tagGeneral.color}>{tagGeneral.texto}</Tag>
+                        <Space size={8}>
+                            <Tag color={tagGeneral.color}>{tagGeneral.texto}</Tag>
+                            {rangoFechas && (
+                                <Tag icon={<Icon icon="mdi:calendar-range-outline" />} color="blue">
+                                    {rangoFechas.fechaInicial} → {rangoFechas.fechaFinal}
+                                </Tag>
+                            )}
+                        </Space>
                     </div>
 
                     {(estatus === 'completado' || estatus === 'error') && (
@@ -153,6 +218,16 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                         </Button>
                     )}
                 </div>
+
+                {interrumpida && (
+                    <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                        message="Esta ejecución se interrumpió antes de terminar"
+                        description="El servidor se reinició (o se detuvo) mientras el proceso estaba corriendo. Los números que ves abajo son solo los municipios que alcanzaron a procesarse antes de la interrupción — no representan el total de los 113. Para completar el mes, inicia una nueva ejecución."
+                    />
+                )}
 
                 <Row gutter={16}>
                     {/* --- FASE 1: DESCARGA --- */}
@@ -166,9 +241,47 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                                 </Tag>
                             </Title>
 
-                            {totalMunicipios ? (
+                            {interrumpida ? (
                                 <>
-                                    <Progress percent={descargaPorcentaje} status={estatus === 'error' && !descargaCompleta ? 'exception' : 'active'} />
+                                    <Text type="secondary" style={{ fontSize: 13 }}>
+                                        Municipios que alcanzaron a procesarse antes de la interrupción:
+                                    </Text>
+                                    <Row gutter={16} style={{ marginTop: 12 }}>
+                                        <Col span={8}>
+                                            <Statistic
+                                                title="Éxitos"
+                                                value={descargaExitosos}
+                                                prefix={<Icon icon="ooui:success" style={{ color: '#22c55e' }} />}
+                                            />
+                                        </Col>
+                                        <Col span={8}>
+                                            <Statistic
+                                                title="Sin movimiento"
+                                                value={descargaSinMovimiento}
+                                                prefix={<Icon icon="fa-solid:empty-set" style={{ color: '#94a3b8', fontSize: 20 }} />}
+                                            />
+                                        </Col>
+                                        <Col span={8}>
+                                            <Statistic
+                                                title="Fallos"
+                                                value={descargaFallos}
+                                                prefix={<Icon icon="material-symbols:chat-error" style={{ color: '#ef4444' }} />}
+                                            />
+                                        </Col>
+                                    </Row>
+                                </>
+                            ) : totalMunicipios ? (
+                                <>
+                                    <Progress
+                                        percent={descargaPorcentaje}
+                                        status={
+                                            estatus === 'error' && !descargaCompleta
+                                                ? 'exception'
+                                                : descargaCompleta
+                                                    ? 'success'
+                                                    : 'active'
+                                        }
+                                    />
                                     <Row gutter={16} style={{ marginTop: 12 }}>
                                         <Col span={8}>
                                             <Statistic
@@ -210,25 +323,27 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                                 </div>
                             )}
 
-                            <div style={{ marginTop: 16, maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
-                                <Timeline
-                                    items={eventosDescarga
-                                        .filter((e) => e.municipio || e.error)
-                                        .map((e) => ({
-                                            children: (
-                                                <Text style={{ fontSize: 12 }}>
-                                                    <Text code>{e.tipo}</Text> {e.municipio || ''} {e.error ? `— ${e.error}` : ''}
-                                                </Text>
-                                            ),
-                                        }))}
-                                />
-                            </div>
+                            {!reconstruido && (
+                                <div style={{ marginTop: 16, maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                                    <Timeline
+                                        items={eventosDescarga
+                                            .filter((e) => e.municipio || e.error)
+                                            .map((e) => ({
+                                                children: (
+                                                    <Text style={{ fontSize: 12 }}>
+                                                        <Text code>{e.tipo}</Text> {e.municipio || ''} {e.error ? `— ${e.error}` : ''}
+                                                    </Text>
+                                                ),
+                                            }))}
+                                    />
+                                </div>
+                            )}
                         </Card>
                     </Col>
 
                     {/* --- FASE 2: ENVÍO --- */}
                     <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
-                        <Card style={{ height: '100%', opacity: envioIniciado ? 1 : 0.5 }}>
+                        <Card style={{ height: '100%', opacity: (interrumpida ? true : envioIniciado) ? 1 : 0.5 }}>
                             <Title level={5} style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Icon icon="ic:round-email" />
                                 2. Envío de correos
@@ -237,11 +352,48 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                                 </Tag>
                             </Title>
 
-                            {!envioIniciado ? (
+                            {interrumpida ? (
+                                !reporte.envioIniciado ? (
+                                    <Text type="secondary">
+                                        La ejecución se interrumpió durante la descarga, antes de llegar a esta fase.
+                                    </Text>
+                                ) : (
+                                    <>
+                                        <Text type="secondary" style={{ fontSize: 13 }}>
+                                            Correos que alcanzaron a procesarse antes de la interrupción:
+                                        </Text>
+                                        <Row gutter={16} style={{ marginTop: 12 }}>
+                                            <Col span={12}>
+                                                <Statistic
+                                                    title="Enviados"
+                                                    value={envioExitosos}
+                                                    prefix={<Icon icon="ooui:success" style={{ color: '#22c55e' }} />}
+                                                />
+                                            </Col>
+                                            <Col span={12}>
+                                                <Statistic
+                                                    title="Requieren revisión"
+                                                    value={envioRevisionManual}
+                                                    prefix={<Icon icon="fluent:document-search-16-filled" style={{ color: '#f59e0b' }} />}
+                                                />
+                                            </Col>
+                                        </Row>
+                                    </>
+                                )
+                            ) : !envioIniciado ? (
                                 <Text type="secondary">Se activará cuando finalice la descarga.</Text>
                             ) : totalAEnviar ? (
                                 <>
-                                    <Progress percent={envioPorcentaje} status={estatus === 'error' ? 'exception' : 'active'} />
+                                    <Progress
+                                        percent={envioPorcentaje}
+                                        status={
+                                            estatus === 'error'
+                                                ? 'exception'
+                                                : envioProcesados >= totalAEnviar
+                                                    ? 'success'
+                                                    : 'active'
+                                        }
+                                    />
                                     <Row gutter={16} style={{ marginTop: 12 }}>
                                         <Col span={12}>
                                             <Statistic
@@ -263,7 +415,7 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                                 <Text type="secondary">Preparando el envío de correos...</Text>
                             )}
 
-                            {municipiosRevisionManual.length > 0 && (
+                            {!interrumpida && municipiosRevisionManual.length > 0 && (
                                 <div style={{ marginTop: 16 }}>
                                     <Text strong style={{ fontSize: 13 }}>Requieren revisión manual:</Text>
                                     <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto' }}>
@@ -299,7 +451,7 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                                 </div>
                             )}
 
-                            {envioIniciado && (
+                            {envioIniciado && !reconstruido && (
                                 <div style={{ marginTop: 16, maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
                                     <Timeline
                                         items={eventosEnvio
@@ -320,7 +472,9 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
 
                 <div ref={finRef} />
 
-                {reporte && (
+                {/* Nota: los botones de reintento no aplican en modo interrumpida porque
+                    el backend exige estatus 'completado' para reintentar envíos (409 si no) */}
+                {reporte && !interrumpida && (
                     <Card style={{ marginTop: 4 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                             <Icon
@@ -330,7 +484,9 @@ function PanelMonitoreo({ ejecucionId, mes, anio, onNuevaEjecucion, onEjecucionI
                             <div>
                                 <Title level={5} style={{ margin: 0 }}>Ejecución finalizada</Title>
                                 <Text type="secondary" style={{ fontSize: 13 }}>
-                                    {MESES[mes - 1]} {anio} — proceso completo de descarga y envío
+                                    {MESES[mes - 1]} {anio}
+                                    {rangoFechas ? ` (${rangoFechas.fechaInicial} → ${rangoFechas.fechaFinal})` : ''}
+                                    {' '}— proceso completo de descarga y envío
                                 </Text>
                             </div>
                         </div>
