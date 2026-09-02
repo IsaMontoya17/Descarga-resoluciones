@@ -64,7 +64,7 @@ model ResultadoEnvio {
   municipioId  Int       @map("municipio_id")
   municipio    Municipio @relation(fields: [municipioId], references: [id])
   estatus      String    // exitoso | fallido | omitido | requiere_revision_manual
-  tipoError    String?   @map("tipo_error")
+  tipoError    String?   @map("tipo_error") @db.Text
   intentos     Int?
 
   @@map("resultados_envio")
