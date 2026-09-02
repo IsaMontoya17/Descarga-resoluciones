@@ -79,7 +79,31 @@ async function procesarEnvioMunicipio({ item, mes, anio, rutaCarpetaMes, plantil
   return { exito: false, error: resultado.error, intentos: resultado.intentos };
 }
 
-async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
+async function obtenerEjecucion(mes, anio, ejecucionId) {
+  if (ejecucionId) {
+    const ejecucion = await prisma.ejecucion.findUnique({ where: { id: ejecucionId } });
+    if (!ejecucion) {
+      throw new Error(`No existe la ejecución con id ${ejecucionId} en la base de datos.`);
+    }
+    return ejecucion;
+  }
+
+  // Modo standalone (CLI): se busca la ejecución de descarga más reciente
+  // para ese mes/año, asumiendo que no hay dos ejecuciones simultáneas.
+  const ejecucion = await prisma.ejecucion.findFirst({
+    where: { mes, anio },
+    orderBy: { id: 'desc' },
+  });
+  if (!ejecucion) {
+    throw new Error(
+      `No se encontró una ejecución registrada para ${nombreMes(mes)}/${anio} en la base de datos. ` +
+      `Ejecuta primero descargarResoluciones.js.`
+    );
+  }
+  return ejecucion;
+}
+
+async function ejecutarEnvioCorreos(mes, anio, { onProgreso, ejecucionId = null } = {}) {
   const avisar = (evento) => {
     console.log(evento);
     if (onProgreso) onProgreso(evento);
@@ -95,18 +119,7 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   }
 
   const reporteDescarga = cargarJSON(rutaReporteDescarga);
-
-  const ejecucion = await prisma.ejecucion.findFirst({
-    where: { mes, anio },
-    orderBy: { id: 'desc' },
-  });
-
-  if (!ejecucion) {
-    throw new Error(
-      `No se encontró una ejecución registrada para ${nombreMes(mes)}/${anio} en la base de datos. ` +
-      `Ejecuta primero descargarResoluciones.js.`
-    );
-  }
+  const ejecucion = await obtenerEjecucion(mes, anio, ejecucionId);
 
   const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
 
@@ -181,7 +194,7 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso } = {}) {
   return reporteEnvio;
 }
 
-async function reintentarEnvioMunicipios(mes, anio, codigos, { onProgreso } = {}) {
+async function reintentarEnvioMunicipios(mes, anio, codigos, { onProgreso, ejecucionId = null } = {}) {
   const avisar = (evento) => {
     console.log(evento);
     if (onProgreso) onProgreso(evento);
@@ -203,15 +216,7 @@ async function reintentarEnvioMunicipios(mes, anio, codigos, { onProgreso } = {}
 
   const reporteDescarga = cargarJSON(rutaReporteDescarga);
   const reporteEnvio = cargarJSON(rutaReporteEnvio);
-
-  const ejecucion = await prisma.ejecucion.findFirst({
-    where: { mes, anio },
-    orderBy: { id: 'desc' },
-  });
-
-  if (!ejecucion) {
-    throw new Error(`No se encontró una ejecución registrada para ${nombreMes(mes)}/${anio} en la base de datos.`);
-  }
+  const ejecucion = await obtenerEjecucion(mes, anio, ejecucionId);
 
   const rutaPlantilla = path.resolve(__dirname, 'plantillaCorreo.json');
   const plantilla = cargarJSON(rutaPlantilla);

@@ -19,16 +19,29 @@ const {
   finalizarDescarga,
 } = require('./resolucionesBot');
 
-async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = false } = {}) {
+async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = false, ejecucionId = null } = {}) {
   const avisar = (evento) => {
     console.log(evento);
     if (onProgreso) onProgreso(evento);
   };
 
-  const admin = await obtenerUsuarioAdmin(prisma);
-  const ejecucion = await prisma.ejecucion.create({
-    data: { mes, anio, usuarioId: admin.id, estatus: 'en_progreso' },
-  });
+  let ejecucion;
+  if (ejecucionId) {
+    // Se llama desde la API: la fila Ejecucion ya fue creada por server.js
+    // con el usuario real (del JWT), así que solo la recuperamos.
+    ejecucion = await prisma.ejecucion.findUnique({ where: { id: ejecucionId } });
+    if (!ejecucion) {
+      throw new Error(`No existe la ejecución con id ${ejecucionId} en la base de datos.`);
+    }
+  } else {
+    // Modo standalone (CLI, sin pasar por la API): se crea aquí mismo,
+    // atribuida al usuario admin, para permitir correr este script suelto.
+    const admin = await obtenerUsuarioAdmin(prisma);
+    ejecucion = await prisma.ejecucion.create({
+      data: { mes, anio, usuarioId: admin.id, estatus: 'en_progreso' },
+    });
+  }
+
   avisar({ tipo: 'ejecucion_registrada', ejecucionId: ejecucion.id });
 
   const rutaCarpetaMes = path.resolve(crearCarpetaMes(config.CARPETA_PRINCIPAL, nombreMes(mes), anio));
@@ -49,6 +62,7 @@ async function ejecutarDescargaResoluciones(mes, anio, { onProgreso, headless = 
     await seleccionarRadioRangoFechas(page);
 
     const { fechaInicial, fechaFinal } = await establecerRangoFechasMes(page, mes, anio);
+    console.log(`\nRango de fechas confirmado: ${fechaInicial} → ${fechaFinal}\n`);
     avisar({ tipo: 'fechas_establecidas', fechaInicial, fechaFinal });
 
     const municipiosBrutos = await obtenerListaMunicipios(page, { carpetaDebug: rutaCarpetaMes });
