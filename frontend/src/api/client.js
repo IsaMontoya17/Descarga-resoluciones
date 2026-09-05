@@ -146,6 +146,31 @@ async function obtenerDetalleHistorialEjecucion(id) {
   return data;
 }
 
+async function descargarReporteEjecucion(id, formato) {
+  const res = await fetch(`${API_URL}/api/ejecuciones/${id}/reporte?formato=${formato}`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'No se pudo descargar el reporte.');
+  }
+
+  const disposicion = res.headers.get('Content-Disposition') || '';
+  const match = disposicion.match(/filename="(.+)"/);
+  const nombreArchivo = match ? match[1] : `reporte.${formato === 'excel' ? 'xlsx' : 'pdf'}`;
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export {
   login,
   iniciarDescarga,
@@ -157,4 +182,5 @@ export {
   actualizarPlantillaCorreo,
   listarHistorialEjecuciones,
   obtenerDetalleHistorialEjecucion,
+  descargarReporteEjecucion,
 };

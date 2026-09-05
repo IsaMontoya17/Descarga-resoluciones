@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Select, Space, Tag, Drawer, Typography, Row, Col, Statistic, Empty } from 'antd';
+import { Card, Table, Select, Space, Tag, Drawer, Typography, Row, Col, Statistic, Empty, Button, message } from 'antd';
 import { Icon } from '@iconify/react';
-import { listarHistorialEjecuciones, obtenerDetalleHistorialEjecucion } from '../api/client';
+import { listarHistorialEjecuciones, obtenerDetalleHistorialEjecucion, descargarReporteEjecucion } from '../api/client';
 import TablaEstadoMunicipios from '../components/TablaEstadoMunicipios';
 
 const { Title } = Typography;
@@ -26,6 +26,7 @@ function PanelHistorial() {
   const [cargando, setCargando] = useState(false);
   const [detalle, setDetalle] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [descargando, setDescargando] = useState({ pdf: false, excel: false });
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -44,6 +45,17 @@ function PanelHistorial() {
       .then(setDetalle)
       .catch(() => setDetalle(null))
       .finally(() => setCargandoDetalle(false));
+  }
+
+  async function manejarDescargar(formato) {
+    setDescargando((prev) => ({ ...prev, [formato]: true }));
+    try {
+      await descargarReporteEjecucion(detalle.id, formato);
+    } catch (err) {
+      message.error(err.message);
+    } finally {
+      setDescargando((prev) => ({ ...prev, [formato]: false }));
+    }
   }
 
   const columnas = [
@@ -86,6 +98,22 @@ function PanelHistorial() {
           <Tag color="success">{e.resumen.envio.exitoso ?? 0}</Tag>
           <Tag color="warning">{e.resumen.envio.requiere_revision_manual ?? 0}</Tag>
         </Space>
+      ),
+    },
+    {
+      title: '',
+      key: 'verDetalle',
+      align: 'center',
+      width: 60,
+      render: (_, e) => (
+        <Button
+          type="text"
+          icon={<Icon icon="mdi:magnify" style={{ fontSize: 18 }} />}
+          onClick={(ev) => {
+            ev.stopPropagation(); 
+            abrirDetalle(e.id);
+          }}
+        />
       ),
     },
   ];
@@ -153,6 +181,26 @@ function PanelHistorial() {
         open={!!detalle}
         onClose={() => setDetalle(null)}
         loading={cargandoDetalle}
+        extra={
+          detalle?.municipios && (
+            <Space>
+              <Button
+                icon={<Icon icon="mdi:file-pdf-box" />}
+                loading={descargando.pdf}
+                onClick={() => manejarDescargar('pdf')}
+              >
+                PDF
+              </Button>
+              <Button
+                icon={<Icon icon="mdi:file-excel-box" />}
+                loading={descargando.excel}
+                onClick={() => manejarDescargar('excel')}
+              >
+                Excel
+              </Button>
+            </Space>
+          )
+        }
       >
         {detalle?.municipios && (
           <>

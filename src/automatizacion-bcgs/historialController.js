@@ -1,11 +1,6 @@
 const prisma = require('../config/prisma');
+const { generarReporteExcel, generarReportePdf } = require('./reportesEjecucion');
 
-/**
- * Toma, por (ejecucionId, municipioId), la fila con mayor id (la más
- * reciente) y suma los conteos por estatus dentro de cada ejecución.
- * Necesario porque los reintentos de envío crean filas nuevas en vez de
- * sobreescribir, así que un groupBy directo por estatus duplicaría conteos.
- */
 function agruparYContar(filas, mapaResumen, clave) {
   const ultimaPorEjecucionMunicipio = new Map();
   for (const f of filas) {
@@ -18,11 +13,6 @@ function agruparYContar(filas, mapaResumen, clave) {
   }
 }
 
-/**
- * GET /api/ejecuciones?mes=&anio=&estatus=&usuarioId=&pagina=&porPagina=
- * Listado paginado para el Panel de Historial. Devuelve solo conteos
- * agregados por ejecución (no el detalle de los 113 municipios).
- */
 async function listarEjecuciones(req, res) {
   const pagina = Math.max(parseInt(req.query.pagina, 10) || 1, 1);
   const porPagina = Math.min(Math.max(parseInt(req.query.porPagina, 10) || 10, 1), 50);
@@ -71,9 +61,6 @@ async function listarEjecuciones(req, res) {
     const resultado = ejecuciones.map((e) => {
       const resumen = resumenPorEjecucion.get(e.id) || { descarga: {}, envio: {} };
       const tieneRevisionManual = (resumen.envio.requiere_revision_manual ?? 0) > 0;
-      // Un estado agregado más útil para la columna "Estado" de la tabla:
-      // una ejecución técnicamente 'completada' pero con revisiones
-      // pendientes merece su propio color en el listado.
       const estadoResumen = tieneRevisionManual && e.estatus === 'completado'
         ? 'con_revision_pendiente'
         : e.estatus;
@@ -118,12 +105,80 @@ function contarPorEstatus(filas) {
 }
 
 /**
- * GET /api/ejecuciones/:id
- * Detalle completo, municipio por municipio, de una ejecución cerrada.
- * Es el mismo "shape" que construirEstadoDesdeBD() arma para una ejecución
- * en progreso reconstruida, salvo que aquí siempre es historia cerrada:
- * nunca hay socket en vivo que la reemplace.
+ * Construye el detalle completo (municipio por municipio) de una ejecución.
+ * Se usa tanto para GET /:id como para la generación de reportes (RF-27),
+ * así que vive separado del handler HTTP.
  */
+async function construirDetalleEjecucion(ejecucionId) {
+  const ejecucion = await prisma.ejecucion.findUnique({
+    where: { id: ejecucionId },
+    include: {
+      usuario: { select: { id: true, nombre: true, usuario: true } },
+      resultadosDescarga: { include: { municipio: true }, orderBy: { id: 'asc' } },
+      resultadosEnvio: { include: { municipio: true }, orderBy: { id: 'asc' } },
+    },
+  });
+
+  if (!ejecucion) return null;
+
+  const descargaPorMunicipio = new Map();
+  for (const r of ejecucion.resultadosDescarga) {
+    descargaPorMunicipio.set(r.municipioId, r);
+  }
+
+  const envioPorMunicipio = new Map();
+  const intentosPorMunicipio = new Map();
+  for (const r of ejecucion.resultadosEnvio) {
+    envioPorMunicipio.set(r.municipioId, r);
+    intentosPorMunicipio.set(r.municipioId, (intentosPorMunicipio.get(r.municipioId) || 0) + 1);
+  }
+
+  const municipiosIds = new Set([
+    ...descargaPorMunicipio.keys(),
+    ...envioPorMunicipio.keys(),
+  ]);
+
+  const municipios = Array.from(municipiosIds)
+    .map((municipioId) => {
+      const descarga = descargaPorMunicipio.get(municipioId);
+      const envio = envioPorMunicipio.get(municipioId);
+      const municipioInfo = descarga?.municipio || envio?.municipio;
+      return {
+        municipioId,
+        nombre: municipioInfo?.nombre,
+        codigoBcgs: municipioInfo?.codigoBcgs,
+        descarga: descarga
+          ? { estatus: descarga.estatus, archivo: descarga.archivo, error: descarga.error }
+          : null,
+        envio: envio
+          ? {
+              estatus: envio.estatus,
+              tipoError: envio.tipoError,
+              intentosRegistrados: intentosPorMunicipio.get(municipioId),
+            }
+          : null,
+      };
+    })
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+
+  const resumen = {
+    descarga: contarPorEstatus(ejecucion.resultadosDescarga),
+    envio: contarPorEstatus(dedupeUltimoPorMunicipio(ejecucion.resultadosEnvio)),
+  };
+
+  return {
+    id: ejecucion.id,
+    mes: ejecucion.mes,
+    anio: ejecucion.anio,
+    estatus: ejecucion.estatus,
+    fechaInicio: ejecucion.fechaInicio,
+    fechaFin: ejecucion.fechaFin,
+    usuario: ejecucion.usuario,
+    resumen,
+    municipios,
+  };
+}
+
 async function obtenerDetalleEjecucion(req, res) {
   const ejecucionId = parseInt(req.params.id, 10);
   if (!ejecucionId) {
@@ -131,82 +186,54 @@ async function obtenerDetalleEjecucion(req, res) {
   }
 
   try {
-    const ejecucion = await prisma.ejecucion.findUnique({
-      where: { id: ejecucionId },
-      include: {
-        usuario: { select: { id: true, nombre: true, usuario: true } },
-        resultadosDescarga: { include: { municipio: true }, orderBy: { id: 'asc' } },
-        resultadosEnvio: { include: { municipio: true }, orderBy: { id: 'asc' } },
-      },
-    });
-
-    if (!ejecucion) {
+    const detalle = await construirDetalleEjecucion(ejecucionId);
+    if (!detalle) {
       return res.status(404).json({ error: 'No existe una ejecución con ese id.' });
     }
-
-    const descargaPorMunicipio = new Map();
-    for (const r of ejecucion.resultadosDescarga) {
-      descargaPorMunicipio.set(r.municipioId, r);
-    }
-
-    // Última fila de envío por municipio = estado vigente (ver nota de
-    // reintentos arriba). intentosRegistrados cuenta cuántas filas hay en
-    // total para ese municipio (1 = sin reintentos).
-    const envioPorMunicipio = new Map();
-    const intentosPorMunicipio = new Map();
-    for (const r of ejecucion.resultadosEnvio) {
-      envioPorMunicipio.set(r.municipioId, r);
-      intentosPorMunicipio.set(r.municipioId, (intentosPorMunicipio.get(r.municipioId) || 0) + 1);
-    }
-
-    const municipiosIds = new Set([
-      ...descargaPorMunicipio.keys(),
-      ...envioPorMunicipio.keys(),
-    ]);
-
-    const municipios = Array.from(municipiosIds)
-      .map((municipioId) => {
-        const descarga = descargaPorMunicipio.get(municipioId);
-        const envio = envioPorMunicipio.get(municipioId);
-        const municipioInfo = descarga?.municipio || envio?.municipio;
-        return {
-          municipioId,
-          nombre: municipioInfo?.nombre,
-          codigoBcgs: municipioInfo?.codigoBcgs,
-          descarga: descarga
-            ? { estatus: descarga.estatus, archivo: descarga.archivo, error: descarga.error }
-            : null,
-          envio: envio
-            ? {
-                estatus: envio.estatus,
-                tipoError: envio.tipoError,
-                intentosRegistrados: intentosPorMunicipio.get(municipioId),
-              }
-            : null,
-        };
-      })
-      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-
-    const resumen = {
-      descarga: contarPorEstatus(ejecucion.resultadosDescarga),
-      envio: contarPorEstatus(dedupeUltimoPorMunicipio(ejecucion.resultadosEnvio)),
-    };
-
-    res.json({
-      id: ejecucion.id,
-      mes: ejecucion.mes,
-      anio: ejecucion.anio,
-      estatus: ejecucion.estatus,
-      fechaInicio: ejecucion.fechaInicio,
-      fechaFin: ejecucion.fechaFin,
-      usuario: ejecucion.usuario,
-      resumen,
-      municipios,
-    });
+    res.json(detalle);
   } catch (err) {
     console.error('Error al obtener el detalle de la ejecución:', err.message);
     res.status(500).json({ error: 'No se pudo obtener el detalle de la ejecución.' });
   }
 }
 
-module.exports = { listarEjecuciones, obtenerDetalleEjecucion };
+/**
+ * GET /api/ejecuciones/:id/reporte?formato=pdf|excel
+ */
+async function exportarReporteEjecucion(req, res) {
+  const ejecucionId = parseInt(req.params.id, 10);
+  const formato = (req.query.formato || 'pdf').toLowerCase();
+
+  if (!ejecucionId) {
+    return res.status(400).json({ error: 'Id de ejecución inválido.' });
+  }
+  if (!['pdf', 'excel'].includes(formato)) {
+    return res.status(400).json({ error: 'El formato debe ser "pdf" o "excel".' });
+  }
+
+  try {
+    const detalle = await construirDetalleEjecucion(ejecucionId);
+    if (!detalle) {
+      return res.status(404).json({ error: 'No existe una ejecución con ese id.' });
+    }
+
+    const nombreBase = `reporte_ejecucion_${detalle.mes}_${detalle.anio}_${detalle.id}`;
+
+    if (formato === 'excel') {
+      const buffer = await generarReporteExcel(detalle);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${nombreBase}.xlsx"`);
+      return res.send(buffer);
+    }
+
+    const buffer = await generarReportePdf(detalle);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreBase}.pdf"`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Error al generar el reporte de la ejecución:', err.message);
+    res.status(500).json({ error: 'No se pudo generar el reporte de la ejecución.' });
+  }
+}
+
+module.exports = { listarEjecuciones, obtenerDetalleEjecucion, exportarReporteEjecucion };
