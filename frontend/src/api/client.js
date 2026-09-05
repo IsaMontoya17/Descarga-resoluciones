@@ -118,6 +118,34 @@ async function actualizarCorreosMunicipio(id, correos) {
   return data;
 }
 
+async function listarHistorialEjecuciones({ mes, anio, estatus, usuarioId, pagina, porPagina } = {}) {
+  const params = new URLSearchParams();
+  if (mes) params.set('mes', mes);
+  if (anio) params.set('anio', anio);
+  if (estatus) params.set('estatus', estatus);
+  if (usuarioId) params.set('usuarioId', usuarioId);
+  if (pagina) params.set('pagina', pagina);
+  if (porPagina) params.set('porPagina', porPagina);
+
+  const res = await fetch(`${API_URL}/api/ejecuciones?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener el historial de ejecuciones.');
+  return data;
+}
+
+async function obtenerDetalleHistorialEjecucion(id) {
+  const res = await fetch(`${API_URL}/api/ejecuciones/${id}`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener el detalle de la ejecución.');
+  return data;
+}
+
 export {
   login,
   iniciarDescarga,
@@ -127,4 +155,6 @@ export {
   actualizarCorreosMunicipio,
   obtenerPlantillaCorreo,
   actualizarPlantillaCorreo,
+  listarHistorialEjecuciones,
+  obtenerDetalleHistorialEjecucion,
 };

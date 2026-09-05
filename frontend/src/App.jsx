@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import PanelEjecucion from './pages/PanelEjecucion';
 import PanelMonitoreo from './pages/PanelMonitoreo';
 import PanelAdministracion from './pages/PanelAdministracion';
+import PanelHistorial from './pages/PanelHistorial';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -20,8 +21,9 @@ function App() {
     return guardada ? JSON.parse(guardada) : null;
   });
 
-  // 'principal' = flujo normal (PanelEjecucion / PanelMonitoreo)
-  // 'admin'     = Panel de Administración de correos por municipio (RF-24)
+  // 'principal'  = flujo normal (PanelEjecucion / PanelMonitoreo)
+  // 'admin'      = Panel de Administración de correos por municipio (RF-24)
+  // 'historial'  = Panel de Historial de ejecuciones (RF-22/23)
   const [vista, setVista] = useState('principal');
 
   function cerrarSesion() {
@@ -56,24 +58,33 @@ function App() {
         </Space>
 
         <Space>
-          {esAdministrador && (
-            vista === 'principal' ? (
+          {vista === 'principal' ? (
+            <>
               <Button
                 type="text"
-                icon={<Icon icon="mdi:email-edit-outline" />}
-                onClick={() => setVista('admin')}
+                icon={<Icon icon="mdi:history" />}
+                onClick={() => setVista('historial')}
               >
-                Administración de correos
+                Historial
               </Button>
-            ) : (
-              <Button
-                type="text"
-                icon={<Icon icon="mdi:arrow-left" />}
-                onClick={() => setVista('principal')}
-              >
-                Volver
-              </Button>
-            )
+              {esAdministrador && (
+                <Button
+                  type="text"
+                  icon={<Icon icon="mdi:email-edit-outline" />}
+                  onClick={() => setVista('admin')}
+                >
+                  Administración de correos
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button
+              type="text"
+              icon={<Icon icon="mdi:arrow-left" />}
+              onClick={() => setVista('principal')}
+            >
+              Volver
+            </Button>
           )}
           <Button type="text" icon={<Icon icon="mdi:logout" />} onClick={cerrarSesion}>
             Cerrar sesión
@@ -84,6 +95,8 @@ function App() {
       <Content>
         {vista === 'admin' ? (
           <PanelAdministracion />
+        ) : vista === 'historial' ? (
+          <PanelHistorial />
         ) : ejecucionActual ? (
           <PanelMonitoreo
             ejecucionId={ejecucionActual.id}

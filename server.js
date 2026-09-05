@@ -295,6 +295,8 @@ app.put('/api/admin/municipios/:id/correos', verificarToken, requiereRol('admini
 app.get('/api/admin/plantilla', verificarToken, requiereRol('administrador'), obtenerPlantilla);
 app.put('/api/admin/plantilla', verificarToken, requiereRol('administrador'), actualizarPlantilla);
 
+app.use('/api/ejecuciones', require('./src/automatizacion-bcgs/historialRoutes'));
+
 const PUERTO = process.env.PUERTO || 3000;
 server.listen(PUERTO, () => {
   console.log(`Servidor escuchando en http://localhost:${PUERTO}`);
