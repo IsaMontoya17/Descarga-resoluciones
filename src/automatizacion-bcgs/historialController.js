@@ -130,7 +130,8 @@ async function construirDetalleEjecucion(ejecucionId) {
   const intentosPorMunicipio = new Map();
   for (const r of ejecucion.resultadosEnvio) {
     envioPorMunicipio.set(r.municipioId, r);
-    intentosPorMunicipio.set(r.municipioId, (intentosPorMunicipio.get(r.municipioId) || 0) + 1);
+    const previos = intentosPorMunicipio.get(r.municipioId) || 0;
+    intentosPorMunicipio.set(r.municipioId, previos + (r.intentos || 1));
   }
 
   const municipiosIds = new Set([
