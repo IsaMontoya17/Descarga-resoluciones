@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout, Button, Space, Typography, Avatar } from 'antd';
 import { Icon } from '@iconify/react';
 import Login from './pages/Login';
@@ -22,13 +22,41 @@ function App() {
     return guardada ? JSON.parse(guardada) : null;
   });
 
-  // Vistas: 'principal' | 'correos' | 'usuarios' | 'historial'
   const [vista, setVista] = useState('principal');
+
+  useEffect(() => {
+    if (!window.history.state?.vista) {
+      window.history.replaceState({ vista: 'principal' }, '');
+    }
+
+    function manejarPopState(evento) {
+      const vistaDestino = evento.state?.vista || 'principal';
+      setVista(vistaDestino);
+    }
+
+    window.addEventListener('popstate', manejarPopState);
+    return () => window.removeEventListener('popstate', manejarPopState);
+  }, []);
+
+  function navegarA(nuevaVista) {
+    if (nuevaVista === vista) return;
+    window.history.pushState({ vista: nuevaVista }, '');
+    setVista(nuevaVista);
+  }
+
+  function volverAtras() {
+    if (window.history.state?.vista && window.history.state.vista !== 'principal') {
+      window.history.back();
+    } else {
+      navegarA('principal');
+    }
+  }
 
   function cerrarSesion() {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
-    setVista('principal'); // Evita que la vista previa persista en una nueva sesión
+    window.history.replaceState({ vista: 'principal' }, '');
+    setVista('principal');
     setUsuario(null);
   }
 
@@ -49,7 +77,7 @@ function App() {
 
   const esAdministrador = usuario.rol === 'administrador';
 
-  // Guarda de seguridad: Si no es admin y está en una ruta administrativa, fuerza 'principal'
+  // Guarda de seguridad para vistas restringidas
   const vistaSegura = (!esAdministrador && (vista === 'correos' || vista === 'usuarios'))
     ? 'principal'
     : vista;
@@ -68,7 +96,7 @@ function App() {
               <Button
                 type="text"
                 icon={<Icon icon="mdi:history" />}
-                onClick={() => setVista('historial')}
+                onClick={() => navegarA('historial')}
               >
                 Historial
               </Button>
@@ -77,14 +105,14 @@ function App() {
                   <Button
                     type="text"
                     icon={<Icon icon="mdi:email-edit-outline" />}
-                    onClick={() => setVista('correos')}
+                    onClick={() => navegarA('correos')}
                   >
                     Administración de correos
                   </Button>
                   <Button
                     type="text"
                     icon={<Icon icon="mdi:account-cog-outline" />}
-                    onClick={() => setVista('usuarios')}
+                    onClick={() => navegarA('usuarios')}
                   >
                     Administración de usuarios
                   </Button>
@@ -95,7 +123,7 @@ function App() {
             <Button
               type="text"
               icon={<Icon icon="mdi:arrow-left" />}
-              onClick={() => setVista('principal')}
+              onClick={volverAtras}
             >
               Volver
             </Button>
