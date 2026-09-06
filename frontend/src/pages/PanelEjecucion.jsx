@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Select, Button, Alert, Typography, Space } from 'antd';
+import { Card, Select, Button, Alert, Typography, Row, Col } from 'antd';
 import { Icon } from '@iconify/react';
 import { iniciarDescarga } from '../api/client';
 
@@ -35,15 +35,20 @@ function PanelEjecucion({ onEjecucionIniciada }) {
   return (
     <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <Card style={{ width: 420 }}>
-        <Title level={4} style={{ marginBottom: 0 }}>
-            <Icon icon="famicons:calendar" style={{ marginRight: 8 }} />Descarga y envío de resoluciones
-        </Title>
-        <Text type="secondary">Selecciona el periodo que deseas procesar.</Text>
+        {/* Encabezado centrado */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <Icon icon="famicons:calendar" style={{ fontSize: 32, marginBottom: 8, display: 'inline-block' }} />
+          <Title level={4} style={{ marginBottom: 4 }}>
+            Descarga y envío de resoluciones
+          </Title>
+          <Text type="secondary">Selecciona el periodo que deseas procesar.</Text>
+        </div>
 
-        {error && <Alert type="error" message={error} showIcon style={{ marginTop: 16 }} />}
+        {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />}
 
-        <Space style={{ width: '100%', marginTop: 20 }} size="middle">
-          <div style={{ flex: 1 }}>
+        {/* Distribución simétrica y centrada de los selectores */}
+        <Row gutter={16}>
+          <Col span={12}>
             <Text strong>Mes</Text>
             <Select
               value={mes}
@@ -52,8 +57,8 @@ function PanelEjecucion({ onEjecucionIniciada }) {
               size="large"
               options={MESES.map((nombre, i) => ({ value: i + 1, label: nombre }))}
             />
-          </div>
-          <div style={{ flex: 1 }}>
+          </Col>
+          <Col span={12}>
             <Text strong>Año</Text>
             <Select
               value={anio}
@@ -62,8 +67,8 @@ function PanelEjecucion({ onEjecucionIniciada }) {
               size="large"
               options={ANIOS.map((a) => ({ value: a, label: a }))}
             />
-          </div>
-        </Space>
+          </Col>
+        </Row>
 
         <Button
           type="primary"
@@ -72,7 +77,7 @@ function PanelEjecucion({ onEjecucionIniciada }) {
           loading={cargando}
           onClick={manejarEjecutar}
           icon={<Icon icon="mdi:play-circle-outline" />}
-          style={{ marginTop: 20 }}
+          style={{ marginTop: 24 }}
         >
           Ejecutar
         </Button>
