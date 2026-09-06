@@ -10,6 +10,7 @@ const { verificarToken, requiereRol } = require('./src/auth/authMiddleware');
 const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/admin/municipiosAdminController');
 const { obtenerPlantilla, actualizarPlantilla } = require('./src/admin/plantillaAdminController');
 const { listarCorreosNotificacion, agregarCorreoNotificacion, eliminarCorreoNotificacion } = require('./src/admin/notificacionAdminController');
+const { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } = require('./src/admin/usuariosAdminController');
 
 const app = express();
 app.use(express.json());
@@ -309,6 +310,11 @@ app.post('/api/admin/notificaciones', verificarToken, requiereRol('administrador
 app.delete('/api/admin/notificaciones/:id', verificarToken, requiereRol('administrador'), eliminarCorreoNotificacion);
 
 app.use('/api/ejecuciones', require('./src/automatizacion-bcgs/historialRoutes'));
+
+app.get('/api/admin/usuarios', verificarToken, requiereRol('administrador'), listarUsuarios);
+app.post('/api/admin/usuarios', verificarToken, requiereRol('administrador'), crearUsuario);
+app.put('/api/admin/usuarios/:id', verificarToken, requiereRol('administrador'), actualizarUsuario);
+app.delete('/api/admin/usuarios/:id', verificarToken, requiereRol('administrador'), eliminarUsuario);
 
 const PUERTO = process.env.PUERTO || 3000;
 server.listen(PUERTO, () => {

@@ -6,6 +6,7 @@ import PanelEjecucion from './pages/PanelEjecucion';
 import PanelMonitoreo from './pages/PanelMonitoreo';
 import PanelAdministracion from './pages/PanelAdministracion';
 import PanelHistorial from './pages/PanelHistorial';
+import PanelUsuarios from './pages/PanelUsuarios';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
@@ -21,14 +22,13 @@ function App() {
     return guardada ? JSON.parse(guardada) : null;
   });
 
-  // 'principal'  = flujo normal (PanelEjecucion / PanelMonitoreo)
-  // 'admin'      = Panel de Administración de correos por municipio (RF-24)
-  // 'historial'  = Panel de Historial de ejecuciones (RF-22/23)
+  // Vistas: 'principal' | 'correos' | 'usuarios' | 'historial'
   const [vista, setVista] = useState('principal');
 
   function cerrarSesion() {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    setVista('principal'); // Evita que la vista previa persista en una nueva sesión
     setUsuario(null);
   }
 
@@ -49,6 +49,11 @@ function App() {
 
   const esAdministrador = usuario.rol === 'administrador';
 
+  // Guarda de seguridad: Si no es admin y está en una ruta administrativa, fuerza 'principal'
+  const vistaSegura = (!esAdministrador && (vista === 'correos' || vista === 'usuarios'))
+    ? 'principal'
+    : vista;
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid #e2e8f0' }}>
@@ -58,7 +63,7 @@ function App() {
         </Space>
 
         <Space>
-          {vista === 'principal' ? (
+          {vistaSegura === 'principal' ? (
             <>
               <Button
                 type="text"
@@ -68,13 +73,22 @@ function App() {
                 Historial
               </Button>
               {esAdministrador && (
-                <Button
-                  type="text"
-                  icon={<Icon icon="mdi:email-edit-outline" />}
-                  onClick={() => setVista('admin')}
-                >
-                  Administración de correos
-                </Button>
+                <>
+                  <Button
+                    type="text"
+                    icon={<Icon icon="mdi:email-edit-outline" />}
+                    onClick={() => setVista('correos')}
+                  >
+                    Administración de correos
+                  </Button>
+                  <Button
+                    type="text"
+                    icon={<Icon icon="mdi:account-cog-outline" />}
+                    onClick={() => setVista('usuarios')}
+                  >
+                    Administración de usuarios
+                  </Button>
+                </>
               )}
             </>
           ) : (
@@ -93,9 +107,11 @@ function App() {
       </Header>
 
       <Content>
-        {vista === 'admin' ? (
+        {vistaSegura === 'correos' ? (
           <PanelAdministracion />
-        ) : vista === 'historial' ? (
+        ) : vistaSegura === 'usuarios' ? (
+          <PanelUsuarios />
+        ) : vistaSegura === 'historial' ? (
           <PanelHistorial />
         ) : ejecucionActual ? (
           <PanelMonitoreo

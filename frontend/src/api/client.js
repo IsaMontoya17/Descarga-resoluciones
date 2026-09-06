@@ -208,6 +208,48 @@ async function eliminarCorreoNotificacion(id) {
   }
 }
 
+async function listarUsuarios() {
+  const res = await fetch(`${API_URL}/api/admin/usuarios`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de usuarios.');
+  return data;
+}
+
+async function crearUsuario(usuario) {
+  const res = await fetch(`${API_URL}/api/admin/usuarios`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerToken()}` },
+    body: JSON.stringify(usuario),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo crear el usuario.');
+  return data;
+}
+
+async function actualizarUsuario(id, cambios) {
+  const res = await fetch(`${API_URL}/api/admin/usuarios/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerToken()}` },
+    body: JSON.stringify(cambios),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo actualizar el usuario.');
+  return data;
+}
+
+async function eliminarUsuario(id) {
+  const res = await fetch(`${API_URL}/api/admin/usuarios/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'No se pudo eliminar el usuario.');
+  }
+}
+
 export {
   login,
   iniciarDescarga,
@@ -223,4 +265,8 @@ export {
   listarCorreosNotificacion,
   agregarCorreoNotificacion,
   eliminarCorreoNotificacion,
+  listarUsuarios,
+  crearUsuario,
+  actualizarUsuario,
+  eliminarUsuario
 };
