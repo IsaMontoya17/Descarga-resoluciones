@@ -1,14 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Input, Button, Modal, Form, Select, Tag, Typography, Space, message, Tooltip, Tabs, Alert } from 'antd';
+import { Table, Input, Button, Modal, Form, Select, Tag, Typography, Space, message, Tooltip, Tabs, Alert, List, Empty, Popconfirm } from 'antd';
 import { Icon } from '@iconify/react';
 import {
     listarMunicipiosAdmin,
     actualizarCorreosMunicipio,
     obtenerPlantillaCorreo,
     actualizarPlantillaCorreo,
+    listarCorreosNotificacion,
+    agregarCorreoNotificacion,
+    eliminarCorreoNotificacion,
 } from '../api/client';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -295,6 +298,116 @@ function TabPlantillaCorreo() {
     );
 }
 
+// RF-19: correos que reciben la notificación de "proceso finalizado
+// correctamente" (con el reporte adjunto) cada vez que termina una
+// ejecución completa de descarga y envío.
+function TabNotificaciones() {
+    const [correos, setCorreos] = useState([]);
+    const [cargando, setCargando] = useState(true);
+    const [nuevoEmail, setNuevoEmail] = useState('');
+    const [agregando, setAgregando] = useState(false);
+    const [eliminandoId, setEliminandoId] = useState(null);
+
+    function cargarCorreos() {
+        setCargando(true);
+        listarCorreosNotificacion()
+            .then(setCorreos)
+            .catch((err) => message.error(err.message))
+            .finally(() => setCargando(false));
+    }
+
+    useEffect(() => {
+        cargarCorreos();
+    }, []);
+
+    async function manejarAgregar() {
+        const limpio = nuevoEmail.trim();
+        if (!limpio) return;
+
+        if (!REGEX_EMAIL.test(limpio)) {
+            message.error('Ese correo no tiene un formato válido.');
+            return;
+        }
+
+        setAgregando(true);
+        try {
+            const creado = await agregarCorreoNotificacion(limpio);
+            setCorreos((prev) => [...prev, creado]);
+            setNuevoEmail('');
+            message.success('Correo agregado.');
+        } catch (err) {
+            message.error(err.message);
+        } finally {
+            setAgregando(false);
+        }
+    }
+
+    async function manejarEliminar(id) {
+        setEliminandoId(id);
+        try {
+            await eliminarCorreoNotificacion(id);
+            setCorreos((prev) => prev.filter((c) => c.id !== id));
+            message.success('Correo eliminado.');
+        } catch (err) {
+            message.error(err.message);
+        } finally {
+            setEliminandoId(null);
+        }
+    }
+
+    return (
+        <div style={{ maxWidth: 600 }}>
+            <Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 20 }}>
+                Estos correos reciben el aviso de "proceso finalizado correctamente" con el reporte
+                adjunto cada vez que termina una ejecución de descarga y envío.
+            </Paragraph>
+
+            <Space.Compact style={{ width: '100%', marginBottom: 20 }}>
+                <Input
+                    placeholder="correo@antioquia.gov.co"
+                    value={nuevoEmail}
+                    onChange={(e) => setNuevoEmail(e.target.value)}
+                    onPressEnter={manejarAgregar}
+                />
+                <Button type="primary" icon={<Icon icon="mdi:plus" />} loading={agregando} onClick={manejarAgregar}>
+                    Agregar
+                </Button>
+            </Space.Compact>
+
+            <List
+                loading={cargando}
+                dataSource={correos}
+                locale={{ emptyText: <Empty description="Sin correos configurados todavía" /> }}
+                bordered
+                style={{ background: '#fff', borderRadius: 8 }}
+                renderItem={(c) => (
+                    <List.Item
+                        actions={[
+                            <Popconfirm
+                                key="eliminar"
+                                title="¿Eliminar este correo?"
+                                onConfirm={() => manejarEliminar(c.id)}
+                            >
+                                <Button
+                                    type="text"
+                                    danger
+                                    icon={<Icon icon="mdi:trash-can-outline" />}
+                                    loading={eliminandoId === c.id}
+                                />
+                            </Popconfirm>,
+                        ]}
+                    >
+                        <Space>
+                            <Icon icon="mdi:email-outline" />
+                            {c.email}
+                        </Space>
+                    </List.Item>
+                )}
+            />
+        </div>
+    );
+}
+
 function PanelAdministracion() {
     return (
         <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f1f5f9', padding: '32px 16px' }}>
@@ -305,7 +418,7 @@ function PanelAdministracion() {
                         Panel de Administración
                     </Title>
                     <Text type="secondary" style={{ fontSize: 13 }}>
-                        Gestión de correos por municipio y plantilla de envío
+                        Gestión de correos por municipio, plantilla de envío y notificaciones
                     </Text>
                 </div>
 
@@ -321,6 +434,11 @@ function PanelAdministracion() {
                             key: 'plantilla',
                             label: 'Plantilla de correo',
                             children: <TabPlantillaCorreo />,
+                        },
+                        {
+                            key: 'notificaciones',
+                            label: 'Notificaciones',
+                            children: <TabNotificaciones />,
                         },
                     ]}
                 />

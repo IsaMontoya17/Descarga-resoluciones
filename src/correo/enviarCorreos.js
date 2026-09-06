@@ -5,6 +5,7 @@ const prisma = require('../config/prisma');
 const { obtenerOCrearMunicipio } = require('../utils/municipios');
 const { obtenerDestinatarioMunicipio } = require('../utils/destinatarios');
 const { nombreMes } = require('../utils/utils');
+const { enviarNotificacionFinalizacion } = require('./notificacionFinal');
 const {
   cargarJSON,
   crearTransportador,
@@ -177,6 +178,8 @@ async function ejecutarEnvioCorreos(mes, anio, { onProgreso, ejecucionId = null 
   const rutaReporteEnvio = path.join(rutaCarpetaMes, '_reporte_envio.json');
   fs.writeFileSync(rutaReporteEnvio, JSON.stringify(reporteEnvio, null, 2), 'utf-8');
 
+    await enviarNotificacionFinalizacion(transportador, { ejecucion, reporteEnvio, config, avisar });
+    
   console.log('\n==================================================');
   console.log(`ENVÍO DE CORREOS — ${nombreMes(mes)} ${anio}`);
   console.log(`Exitosos: ${reporteEnvio.exitosos.length}`);

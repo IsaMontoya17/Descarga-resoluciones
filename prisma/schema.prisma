@@ -88,3 +88,11 @@ model PlantillaCorreo {
 
   @@map("plantilla_correo")
 }
+
+model CorreoNotificacion {
+  id        Int      @id @default(autoincrement())
+  email     String
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  @@map("correos_notificacion")
+}

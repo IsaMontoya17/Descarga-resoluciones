@@ -171,6 +171,43 @@ async function descargarReporteEjecucion(id, formato) {
   window.URL.revokeObjectURL(url);
 }
 
+async function listarCorreosNotificacion() {
+  const res = await fetch(`${API_URL}/api/admin/notificaciones`, {
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de correos de notificación.');
+  return data;
+}
+
+async function agregarCorreoNotificacion(email) {
+  const res = await fetch(`${API_URL}/api/admin/notificaciones`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${obtenerToken()}`,
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo agregar el correo de notificación.');
+  return data;
+}
+
+async function eliminarCorreoNotificacion(id) {
+  const res = await fetch(`${API_URL}/api/admin/notificaciones/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${obtenerToken()}` },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'No se pudo eliminar el correo de notificación.');
+  }
+}
+
 export {
   login,
   iniciarDescarga,
@@ -183,4 +220,7 @@ export {
   listarHistorialEjecuciones,
   obtenerDetalleHistorialEjecucion,
   descargarReporteEjecucion,
+  listarCorreosNotificacion,
+  agregarCorreoNotificacion,
+  eliminarCorreoNotificacion,
 };

@@ -9,6 +9,7 @@ const { login } = require('./src/auth/authController');
 const { verificarToken, requiereRol } = require('./src/auth/authMiddleware');
 const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/admin/municipiosAdminController');
 const { obtenerPlantilla, actualizarPlantilla } = require('./src/admin/plantillaAdminController');
+const { listarCorreosNotificacion, agregarCorreoNotificacion, eliminarCorreoNotificacion } = require('./src/admin/notificacionAdminController');
 
 const app = express();
 app.use(express.json());
@@ -294,6 +295,18 @@ app.get('/api/admin/municipios', verificarToken, requiereRol('administrador'), l
 app.put('/api/admin/municipios/:id/correos', verificarToken, requiereRol('administrador'), actualizarCorreosMunicipio);
 app.get('/api/admin/plantilla', verificarToken, requiereRol('administrador'), obtenerPlantilla);
 app.put('/api/admin/plantilla', verificarToken, requiereRol('administrador'), actualizarPlantilla);
+
+/**
+ * GET /api/admin/notificaciones
+ * POST /api/admin/notificaciones
+ * DELETE /api/admin/notificaciones/:id
+ * RF-19: correos que reciben la notificación de "proceso finalizado
+ * correctamente" al terminar la distribución mensual. Restringido al rol
+ * "administrador", igual que el resto del Panel de Administración.
+ */
+app.get('/api/admin/notificaciones', verificarToken, requiereRol('administrador'), listarCorreosNotificacion);
+app.post('/api/admin/notificaciones', verificarToken, requiereRol('administrador'), agregarCorreoNotificacion);
+app.delete('/api/admin/notificaciones/:id', verificarToken, requiereRol('administrador'), eliminarCorreoNotificacion);
 
 app.use('/api/ejecuciones', require('./src/automatizacion-bcgs/historialRoutes'));
 
