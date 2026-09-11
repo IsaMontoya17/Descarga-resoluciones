@@ -4,6 +4,30 @@ function obtenerToken() {
   return localStorage.getItem('token');
 }
 
+function notificarSesionExpirada() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('usuario');
+  window.dispatchEvent(new Event('sesion-expirada'));
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+
+  if (!(options.body instanceof FormData)) {
+    headers.Authorization = `Bearer ${obtenerToken()}`;
+  }
+
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    notificarSesionExpirada();
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Tu sesión ha expirado. Inicia sesión nuevamente.');
+  }
+
+  return res;
+}
+
 async function login(usuario, password) {
   const res = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
@@ -21,12 +45,9 @@ async function login(usuario, password) {
 }
 
 async function iniciarDescarga(mes, anio) {
-  const res = await fetch(`${API_URL}/api/descargas`, {
+  const res = await apiFetch('/api/descargas', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${obtenerToken()}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mes, anio }),
   });
 
@@ -40,9 +61,7 @@ async function iniciarDescarga(mes, anio) {
 }
 
 async function obtenerPlantillaCorreo() {
-  const res = await fetch(`${API_URL}/api/admin/plantilla`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch('/api/admin/plantilla');
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener la plantilla de correo.');
@@ -50,12 +69,9 @@ async function obtenerPlantillaCorreo() {
 }
 
 async function actualizarPlantillaCorreo(asunto, cuerpo) {
-  const res = await fetch(`${API_URL}/api/admin/plantilla`, {
+  const res = await apiFetch('/api/admin/plantilla', {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${obtenerToken()}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ asunto, cuerpo }),
   });
 
@@ -65,9 +81,7 @@ async function actualizarPlantillaCorreo(asunto, cuerpo) {
 }
 
 async function consultarEjecucion(id) {
-  const res = await fetch(`${API_URL}/api/descargas/${id}`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch(`/api/descargas/${id}`);
 
   const data = await res.json();
 
@@ -79,12 +93,9 @@ async function consultarEjecucion(id) {
 }
 
 async function reintentarEnvio(id, codigos) {
-  const res = await fetch(`${API_URL}/api/descargas/${id}/reintentar-envio`, {
+  const res = await apiFetch(`/api/descargas/${id}/reintentar-envio`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${obtenerToken()}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ codigos }),
   });
 
@@ -94,9 +105,7 @@ async function reintentarEnvio(id, codigos) {
 }
 
 async function listarMunicipiosAdmin() {
-  const res = await fetch(`${API_URL}/api/admin/municipios`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch('/api/admin/municipios');
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de municipios.');
@@ -104,12 +113,9 @@ async function listarMunicipiosAdmin() {
 }
 
 async function actualizarCorreosMunicipio(id, correos) {
-  const res = await fetch(`${API_URL}/api/admin/municipios/${id}/correos`, {
+  const res = await apiFetch(`/api/admin/municipios/${id}/correos`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${obtenerToken()}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ correos }),
   });
 
@@ -127,9 +133,7 @@ async function listarHistorialEjecuciones({ mes, anio, estatus, usuarioId, pagin
   if (pagina) params.set('pagina', pagina);
   if (porPagina) params.set('porPagina', porPagina);
 
-  const res = await fetch(`${API_URL}/api/ejecuciones?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch(`/api/ejecuciones?${params.toString()}`);
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener el historial de ejecuciones.');
@@ -137,9 +141,7 @@ async function listarHistorialEjecuciones({ mes, anio, estatus, usuarioId, pagin
 }
 
 async function obtenerDetalleHistorialEjecucion(id) {
-  const res = await fetch(`${API_URL}/api/ejecuciones/${id}`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch(`/api/ejecuciones/${id}`);
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener el detalle de la ejecución.');
@@ -147,9 +149,7 @@ async function obtenerDetalleHistorialEjecucion(id) {
 }
 
 async function descargarReporteEjecucion(id, formato) {
-  const res = await fetch(`${API_URL}/api/ejecuciones/${id}/reporte?formato=${formato}`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch(`/api/ejecuciones/${id}/reporte?formato=${formato}`);
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -172,9 +172,7 @@ async function descargarReporteEjecucion(id, formato) {
 }
 
 async function listarCorreosNotificacion() {
-  const res = await fetch(`${API_URL}/api/admin/notificaciones`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch('/api/admin/notificaciones');
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de correos de notificación.');
@@ -182,12 +180,9 @@ async function listarCorreosNotificacion() {
 }
 
 async function agregarCorreoNotificacion(email) {
-  const res = await fetch(`${API_URL}/api/admin/notificaciones`, {
+  const res = await apiFetch('/api/admin/notificaciones', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${obtenerToken()}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
 
@@ -197,9 +192,8 @@ async function agregarCorreoNotificacion(email) {
 }
 
 async function eliminarCorreoNotificacion(id) {
-  const res = await fetch(`${API_URL}/api/admin/notificaciones/${id}`, {
+  const res = await apiFetch(`/api/admin/notificaciones/${id}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
   });
 
   if (!res.ok) {
@@ -209,18 +203,16 @@ async function eliminarCorreoNotificacion(id) {
 }
 
 async function listarUsuarios() {
-  const res = await fetch(`${API_URL}/api/admin/usuarios`, {
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
-  });
+  const res = await apiFetch('/api/admin/usuarios');
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo obtener la lista de usuarios.');
   return data;
 }
 
 async function crearUsuario(usuario) {
-  const res = await fetch(`${API_URL}/api/admin/usuarios`, {
+  const res = await apiFetch('/api/admin/usuarios', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerToken()}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(usuario),
   });
   const data = await res.json();
@@ -229,9 +221,9 @@ async function crearUsuario(usuario) {
 }
 
 async function actualizarUsuario(id, cambios) {
-  const res = await fetch(`${API_URL}/api/admin/usuarios/${id}`, {
+  const res = await apiFetch(`/api/admin/usuarios/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${obtenerToken()}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cambios),
   });
   const data = await res.json();
@@ -240,9 +232,8 @@ async function actualizarUsuario(id, cambios) {
 }
 
 async function eliminarUsuario(id) {
-  const res = await fetch(`${API_URL}/api/admin/usuarios/${id}`, {
+  const res = await apiFetch(`/api/admin/usuarios/${id}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${obtenerToken()}` },
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

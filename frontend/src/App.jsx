@@ -7,14 +7,21 @@ import PanelMonitoreo from './pages/PanelMonitoreo';
 import PanelAdministracion from './pages/PanelAdministracion';
 import PanelHistorial from './pages/PanelHistorial';
 import PanelUsuarios from './pages/PanelUsuarios';
+import { tokenValido } from './utils/token';
 
 const { Header, Content } = Layout;
 const { Text } = Typography;
 
 function App() {
   const [usuario, setUsuario] = useState(() => {
+    const token = localStorage.getItem('token');
     const guardado = localStorage.getItem('usuario');
-    return guardado ? JSON.parse(guardado) : null;
+    if (token && guardado && tokenValido(token)) {
+      return JSON.parse(guardado);
+    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    return null;
   });
 
   const [ejecucionActual, setEjecucionActual] = useState(() => {
@@ -36,6 +43,25 @@ function App() {
 
     window.addEventListener('popstate', manejarPopState);
     return () => window.removeEventListener('popstate', manejarPopState);
+  }, []);
+
+  useEffect(() => {
+    function manejarSesionExpirada() {
+      cerrarSesion();
+    }
+    window.addEventListener('sesion-expirada', manejarSesionExpirada);
+
+    const intervalo = setInterval(() => {
+      const token = localStorage.getItem('token');
+      if (!tokenValido(token)) {
+        cerrarSesion();
+      }
+    }, 60000); 
+
+    return () => {
+      window.removeEventListener('sesion-expirada', manejarSesionExpirada);
+      clearInterval(intervalo);
+    };
   }, []);
 
   function navegarA(nuevaVista) {
