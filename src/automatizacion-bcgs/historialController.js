@@ -237,4 +237,4 @@ async function exportarReporteEjecucion(req, res) {
   }
 }
 
-module.exports = { listarEjecuciones, obtenerDetalleEjecucion, exportarReporteEjecucion };
+module.exports = { listarEjecuciones, obtenerDetalleEjecucion, exportarReporteEjecucion, construirDetalleEjecucion };
