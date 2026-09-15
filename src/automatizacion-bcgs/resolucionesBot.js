@@ -15,6 +15,7 @@ async function seleccionarRadioRangoFechas(page) {
 async function seleccionarFechaEnCalendario(page, campoId, dia, mes, anio) {
   const mesIndexado = mes - 1;
 
+  await page.waitForSelector(`#${campoId}`, { visible: true, timeout: 15000 });
   await page.click(`#${campoId}`);
   await new Promise((r) => setTimeout(r, 500));
 

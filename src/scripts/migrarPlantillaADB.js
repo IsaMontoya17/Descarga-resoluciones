@@ -13,7 +13,7 @@ async function migrarPlantilla() {
     return;
   }
 
-  const rutaJson = path.resolve(__dirname, '../correo/plantillaCorreo.json');
+  const rutaJson = path.resolve(__dirname, './plantillaCorreo.json');
   const plantilla = cargarJSON(rutaJson);
 
   if (!plantilla.asunto || !plantilla.cuerpo) {

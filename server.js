@@ -7,10 +7,10 @@ const { ejecutarDescargaResoluciones } = require('./src/automatizacion-bcgs/desc
 const { ejecutarEnvioCorreos, reintentarEnvioMunicipios } = require('./src/correo/enviarCorreos');
 const { login } = require('./src/auth/authController');
 const { verificarToken, requiereRol } = require('./src/auth/authMiddleware');
-const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/admin/municipiosAdminController');
-const { obtenerPlantilla, actualizarPlantilla } = require('./src/admin/plantillaAdminController');
-const { listarCorreosNotificacion, agregarCorreoNotificacion, eliminarCorreoNotificacion } = require('./src/admin/notificacionAdminController');
-const { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } = require('./src/admin/usuariosAdminController');
+const { listarMunicipios, actualizarCorreosMunicipio } = require('./src/automatizacion-bcgs/municipiosController');
+const { obtenerPlantilla, actualizarPlantilla } = require('./src/correo/plantillaController');
+const { listarCorreosNotificacion, agregarCorreoNotificacion, eliminarCorreoNotificacion } = require('./src/correo/notificacionController');
+const { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } = require('./src/usuarios/usuariosController');
 
 const app = express();
 app.use(express.json());
