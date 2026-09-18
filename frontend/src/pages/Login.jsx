@@ -55,10 +55,6 @@ function Login({ onLoginExitoso }) {
             Iniciar sesión
           </Button>
         </Form>
-
-        <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 11, marginTop: 20 }}>
-          Acceso restringido a personal autorizado (RF-02)
-        </Text>
       </Card>
     </div>
   );
