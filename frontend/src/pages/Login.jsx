@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Form, Input, Button, Card, Alert, Typography } from 'antd';
+import { Form, Input, Button, Card, Alert, Typography, Divider } from 'antd';
 import { Icon } from '@iconify/react';
 import { login } from '../api/client';
 
@@ -27,13 +27,22 @@ function Login({ onLoginExitoso }) {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
-      <Card style={{ width: 380 }}>
-        <Title level={4} style={{ marginBottom: 0 }}>Gerencia de Catastro</Title>
-        <Text type="secondary">Gobernación de Antioquia — Descarga de resoluciones</Text>
+      <Card style={{ width: 420 }}>
+        <Title level={4} style={{ marginBottom: 0, textAlign: 'center' }}>
+          Automatización de Resoluciones Catastrales
+        </Title>
+        <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 4 }}>
+          Gerencia de Catastro — Gobernación de Antioquia
+        </Text>
+        <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12, marginTop: 2 }}>
+          Descarga, organización y envío masivo de resoluciones a los 113 municipios
+        </Text>
 
-        {error && <Alert type="error" message={error} showIcon style={{ marginTop: 16 }} />}
+        <Divider style={{ margin: '20px 0' }} />
 
-        <Form layout="vertical" onFinish={manejarSubmit} style={{ marginTop: 20 }}>
+        {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />}
+
+        <Form layout="vertical" onFinish={manejarSubmit}>
           <Form.Item label="Usuario" name="usuario" rules={[{ required: true, message: 'Ingresa tu usuario' }]}>
             <Input prefix={<Icon icon="mdi:account-outline" />} size="large" />
           </Form.Item>
@@ -46,6 +55,10 @@ function Login({ onLoginExitoso }) {
             Iniciar sesión
           </Button>
         </Form>
+
+        <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 11, marginTop: 20 }}>
+          Acceso restringido a personal autorizado (RF-02)
+        </Text>
       </Card>
     </div>
   );
